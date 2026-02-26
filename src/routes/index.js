@@ -10,6 +10,8 @@ import ProtectedRoute from '../components/ProtectedRoute';
 import Rooms from '../pages/admin/Rooms';
 import PictureManagement from '../pages/admin/PictureManagement';
 
+import AdminDashboard from '../pages/admin/AdminDashboard';
+
 const router = createBrowserRouter([
   { path: '/', element: <Home /> },
   { path: '/gallery', element: <GalleryView /> },
@@ -39,6 +41,14 @@ const router = createBrowserRouter([
       </ProtectedRoute>
     ),
   },
+  {
+  path: '/admin',
+  element: (
+    <ProtectedRoute allowedRoles={['admin']}>
+      <AdminDashboard />
+    </ProtectedRoute>
+  ),
+}
 ]);
 
 export default router;

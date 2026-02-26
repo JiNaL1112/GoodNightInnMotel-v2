@@ -25,6 +25,7 @@ const Header = () => {
     { label: 'Reservations', href: '/admin/reservation'       },
     { label: 'Rooms',        href: '/admin/rooms'             },
     { label: 'Pictures',     href: '/admin/picturemanagement' },
+    { label: 'Dashboard', href: '/admin' },
   ];
 
   const links = role === 'admin' ? adminLinks : userLinks;
