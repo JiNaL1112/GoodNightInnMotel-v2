@@ -9,12 +9,10 @@ import Reservation from '../pages/admin/Reservation';
 import ProtectedRoute from '../components/ProtectedRoute';
 import Rooms from '../pages/admin/Rooms';
 import PictureManagement from '../pages/admin/PictureManagement';
-import Contact from '../pages/Contact';
 
 const router = createBrowserRouter([
   { path: '/', element: <Home /> },
   { path: '/gallery', element: <GalleryView /> },
-  { path: '/contact', element: <Contact /> },
   { path: '/room/:id', element: <RoomDetails /> },
   { path: '/activities', element: <Activities /> },
   {

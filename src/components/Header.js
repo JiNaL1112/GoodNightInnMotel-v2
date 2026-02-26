@@ -19,7 +19,6 @@ const Header = () => {
     { label: 'Rooms',      href: '/#rooms'      },
     { label: 'Activities', href: '/activities'  },
     { label: 'Gallery',    href: '/gallery'     },
-    { label: 'Contact',    href: '/contact'     },
   ];
 
   const adminLinks = [

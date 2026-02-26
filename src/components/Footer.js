@@ -21,7 +21,7 @@ const Footer = () => (
       <div className="footer-links-group">
         <div className="footer-col">
           <div className="footer-col-title">Navigate</div>
-          {[['Home', '/'], ['Rooms', '/#rooms'], ['Gallery', '/gallery'], ['Activities', '/activities'], ['Contact', '/contact']].map(([l, h]) => (
+          {[['Home', '/'], ['Rooms', '/#rooms'], ['Gallery', '/gallery'], ['Activities', '/activities']].map(([l, h]) => (
             <a key={l} href={h} className="footer-link">{l}</a>
           ))}
         </div>
