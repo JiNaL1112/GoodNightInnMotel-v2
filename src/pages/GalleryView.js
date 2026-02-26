@@ -268,7 +268,7 @@ const GalleryView = () => {
               {images.map((img, i) => (
                 <div
                   key={img.id}
-                  className={visible ? 'anim-in' : 'anim-hidden'}
+                  className={`gallery-item ${visible ? 'anim-in' : 'anim-hidden'}`}
                   onClick={() => setLightbox(img.src)}
                   style={{
                     transitionDelay: `${Math.min(i * 0.05, 0.5)}s`,
@@ -280,7 +280,6 @@ const GalleryView = () => {
                     background: 'var(--border)',
                     boxShadow: 'var(--shadow-sm)',
                   }}
-                  className={`gallery-item ${visible ? 'anim-in' : 'anim-hidden'}`}
                 >
                   <img
                     src={img.src}
