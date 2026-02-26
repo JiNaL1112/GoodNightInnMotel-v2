@@ -1,7 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=JetBrains+Mono:wght@300;400;500&display=swap');
 
-/* ── TOKENS — scoped to .adm-shell only, won't bleed into user pages ── */
+/* ─────────────────────────────────────────
+   ADMIN DESIGN TOKENS
+   Scoped to .adm-shell — won't bleed into user pages
+───────────────────────────────────────── */
 .adm-shell {
+  /* Dark palette (dashboard panels) */
   --ink:        #0a0a0f;
   --ink-2:      #12121a;
   --ink-3:      #1a1a28;
@@ -11,6 +15,8 @@
   --text:       #e8e8f0;
   --text-2:     #9898b8;
   --text-3:     #5a5a7a;
+
+  /* Accent palette — same gold/teal/rose/violet as before */
   --gold:       #f0c060;
   --gold-dim:   rgba(240,192,96,0.12);
   --gold-glow:  rgba(240,192,96,0.25);
@@ -22,30 +28,38 @@
   --violet-dim: rgba(144,128,240,0.10);
   --green:      #50d890;
   --green-dim:  rgba(80,216,144,0.10);
-  --radius:     12px;
-  --radius-lg:  18px;
-  --font-disp:  'Syne', sans-serif;
+
+  /* Typography */
+  --font-disp:  'DM Sans', sans-serif;
+  --font-serif: 'Playfair Display', serif;
   --font-mono:  'JetBrains Mono', monospace;
 
-  /* ── ADMIN SHELL ── */
+  /* Shape */
+  --radius:     12px;
+  --radius-lg:  18px;
+
+  /* Shell */
   min-height: 100vh;
   background: var(--ink);
   font-family: var(--font-disp);
   color: var(--text);
-  padding-top: 68px; /* nav offset */
+  /* No padding-top — we hide the global Header on admin pages via AdminDashboard */
 }
 
+/* ─────────────────────────────────────────
+   TOP BAR  (replaces global Header on admin pages)
+───────────────────────────────────────── */
 .adm-topbar {
   background: var(--ink-2);
   border-bottom: 1px solid var(--border);
   padding: 0 32px;
-  height: 60px;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   position: sticky;
-  top: 68px;
-  z-index: 50;
+  top: 0;
+  z-index: 100;
 }
 .adm-topbar-title {
   font-size: 13px;
@@ -53,45 +67,66 @@
   letter-spacing: 3px;
   text-transform: uppercase;
   color: var(--gold);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.adm-topbar-title-icon {
+  width: 32px;
+  height: 32px;
+  background: var(--gold-dim);
+  border: 1px solid var(--gold-glow);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
 }
 .adm-topbar-meta {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   font-size: 12px;
   color: var(--text-3);
   font-family: var(--font-mono);
 }
 .adm-live-dot {
-  width: 7px; height: 7px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--green);
   box-shadow: 0 0 8px var(--green);
   animation: livepulse 2s infinite;
 }
 @keyframes livepulse {
-  0%,100% { opacity: 1; }
-  50%      { opacity: 0.4; }
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
 }
 
-/* ── SIDEBAR + CONTENT LAYOUT ── */
+/* ─────────────────────────────────────────
+   BODY LAYOUT: sidebar + main
+───────────────────────────────────────── */
 .adm-body {
   display: grid;
   grid-template-columns: 220px 1fr;
-  min-height: calc(100vh - 128px);
+  min-height: calc(100vh - 64px);
 }
+
+/* ─────────────────────────────────────────
+   SIDEBAR
+───────────────────────────────────────── */
 .adm-sidebar {
   background: var(--ink-2);
   border-right: 1px solid var(--border);
   padding: 24px 0;
   position: sticky;
-  top: 128px;
-  height: calc(100vh - 128px);
+  top: 64px;
+  height: calc(100vh - 64px);
   overflow-y: auto;
 }
 .adm-nav-section {
   padding: 0 16px;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 .adm-nav-label {
   font-size: 9px;
@@ -100,7 +135,7 @@
   text-transform: uppercase;
   color: var(--text-3);
   padding: 0 12px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 .adm-nav-item {
   display: flex;
@@ -112,31 +147,44 @@
   font-weight: 500;
   color: var(--text-2);
   cursor: pointer;
-  transition: all 0.18s;
+  transition: background 0.18s, color 0.18s;
   border: none;
   background: none;
   width: 100%;
   text-align: left;
+  font-family: var(--font-disp);
 }
-.adm-nav-item:hover { background: var(--ink-3); color: var(--text); }
-.adm-nav-item.active { background: var(--gold-dim); color: var(--gold); }
-.adm-nav-icon { font-size: 16px; width: 20px; text-align: center; }
-.adm-nav-badge {
-  margin-left: auto;
-  background: var(--rose);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 7px;
-  border-radius: 100px;
+.adm-nav-item:hover {
+  background: var(--ink-3);
+  color: var(--text);
+}
+.adm-nav-item.active {
+  background: var(--gold-dim);
+  color: var(--gold);
+}
+.adm-nav-icon {
+  font-size: 16px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.adm-nav-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 12px 16px;
 }
 
+/* ─────────────────────────────────────────
+   MAIN CONTENT
+───────────────────────────────────────── */
 .adm-content {
   padding: 32px;
   overflow-y: auto;
 }
 
-/* ── STATS ROW ── */
+/* ─────────────────────────────────────────
+   STATS GRID
+───────────────────────────────────────── */
 .adm-stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -152,17 +200,20 @@
   overflow: hidden;
   transition: transform 0.2s, border-color 0.2s;
 }
-.adm-stat-card:hover { transform: translateY(-3px); border-color: var(--border-2); }
+.adm-stat-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--border-2);
+}
 .adm-stat-card::before {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 2px;
 }
-.adm-stat-card.gold::before  { background: var(--gold); }
-.adm-stat-card.teal::before  { background: var(--teal); }
-.adm-stat-card.rose::before  { background: var(--rose); }
-.adm-stat-card.violet::before{ background: var(--violet); }
+.adm-stat-card.gold::before   { background: var(--gold);   }
+.adm-stat-card.teal::before   { background: var(--teal);   }
+.adm-stat-card.rose::before   { background: var(--rose);   }
+.adm-stat-card.violet::before { background: var(--violet); }
 
 .adm-stat-icon {
   font-size: 22px;
@@ -201,10 +252,12 @@
   position: absolute;
   bottom: 12px; right: 16px;
   font-size: 18px;
-  opacity: 0.25;
+  opacity: 0.2;
 }
 
-/* ── PANELS ── */
+/* ─────────────────────────────────────────
+   PANEL LAYOUTS
+───────────────────────────────────────── */
 .adm-panels {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -217,6 +270,10 @@
   gap: 18px;
   margin-bottom: 18px;
 }
+
+/* ─────────────────────────────────────────
+   PANEL CARD
+───────────────────────────────────────── */
 .adm-panel {
   background: var(--ink-2);
   border: 1px solid var(--border);
@@ -236,24 +293,27 @@
   text-transform: uppercase;
   color: var(--text-2);
 }
-.adm-panel-badge {
-  font-size: 10px;
+.adm-panel-tag {
+  font-size: 11px;
   font-weight: 700;
-  padding: 3px 9px;
-  border-radius: 100px;
-  background: var(--gold-dim);
-  color: var(--gold);
+  color: var(--text-3);
+  font-family: var(--font-mono);
+}
+.adm-panel-body {
+  /* flex container for panel contents */
 }
 
-/* ── REVENUE CHART ── */
+/* ─────────────────────────────────────────
+   REVENUE BAR CHART
+───────────────────────────────────────── */
 .adm-rev-chart {
   display: flex;
   align-items: flex-end;
-  gap: 8px;
+  gap: 6px;
   height: 120px;
   padding-bottom: 4px;
 }
-.adm-rev-col {
+.adm-rev-bar-wrap {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -269,9 +329,9 @@
   border: 1px solid var(--gold-glow);
   transition: height 1s ease, background 0.2s;
   cursor: pointer;
-  position: relative;
+  min-height: 0;
 }
-.adm-rev-bar:hover { background: rgba(240,192,96,0.25); }
+.adm-rev-bar:hover   { background: rgba(240,192,96,0.25); }
 .adm-rev-bar.current { background: var(--gold-glow); border-color: var(--gold); }
 .adm-rev-month {
   font-size: 9px;
@@ -280,16 +340,16 @@
   letter-spacing: 0.5px;
 }
 
-/* ── TABLE ── */
+/* ─────────────────────────────────────────
+   TABLE
+───────────────────────────────────────── */
 .adm-table-wrap { overflow-x: auto; }
 .adm-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
 }
-.adm-table thead tr {
-  border-bottom: 1px solid var(--border);
-}
+.adm-table thead tr { border-bottom: 1px solid var(--border); }
 .adm-table th {
   padding: 10px 14px;
   text-align: left;
@@ -307,8 +367,11 @@
   white-space: nowrap;
 }
 .adm-table tr:last-child td { border-bottom: none; }
-.adm-table tr:hover td { background: rgba(255,255,255,0.02); }
+.adm-table tr:hover td      { background: rgba(255,255,255,0.02); }
 
+/* ─────────────────────────────────────────
+   BADGES
+───────────────────────────────────────── */
 .adm-badge {
   font-size: 10px;
   font-weight: 700;
@@ -316,83 +379,59 @@
   border-radius: 100px;
   letter-spacing: 0.3px;
 }
-.adm-badge.booked   { background: rgba(80,216,144,0.15); color: var(--green); }
-.adm-badge.pending  { background: rgba(240,192,96,0.15);  color: var(--gold);  }
-.adm-badge.cancelled{ background: rgba(240,96,144,0.15);  color: var(--rose);  }
+.adm-badge.booked  { background: rgba(80,216,144,0.15);  color: var(--green); }
+.adm-badge.pending { background: rgba(240,192,96,0.15);  color: var(--gold);  }
 
-.adm-guest-cell { display: flex; align-items: center; gap: 9px; }
+/* ─────────────────────────────────────────
+   GUEST CELL
+───────────────────────────────────────── */
+.adm-guest-cell  { display: flex; align-items: center; gap: 9px; }
 .adm-avatar {
   width: 30px; height: 30px;
   border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
-  font-weight: 700;
-  font-size: 12px;
-  flex-shrink: 0;
+  font-weight: 700; font-size: 12px; flex-shrink: 0;
 }
 .adm-guest-name  { font-size: 13px; font-weight: 600; color: var(--text); }
 .adm-guest-email { font-size: 11px; color: var(--text-3); font-family: var(--font-mono); }
 
-/* ── ACTION BUTTONS ── */
+/* ─────────────────────────────────────────
+   ACTION BUTTONS
+───────────────────────────────────────── */
 .adm-btn {
-  border: none; cursor: pointer; font-family: var(--font-disp);
-  font-size: 11px; font-weight: 700; padding: 6px 12px; border-radius: 6px;
+  border: none; cursor: pointer;
+  font-family: var(--font-disp);
+  font-size: 11px; font-weight: 700;
+  padding: 6px 12px; border-radius: 6px;
   transition: all 0.15s;
 }
-.adm-btn-confirm { background: rgba(80,216,144,0.15); color: var(--green); }
-.adm-btn-confirm:hover { background: rgba(80,216,144,0.25); }
-.adm-btn-reject  { background: rgba(240,96,144,0.15); color: var(--rose); }
-.adm-btn-reject:hover  { background: rgba(240,96,144,0.25); }
-.adm-btn-edit    { background: rgba(64,224,200,0.12); color: var(--teal); }
-.adm-btn-edit:hover    { background: rgba(64,224,200,0.22); }
+.adm-btn-confirm { background: rgba(80,216,144,0.15);  color: var(--green);  }
+.adm-btn-confirm:hover { background: rgba(80,216,144,0.28); }
+.adm-btn-reject  { background: rgba(240,96,144,0.15);  color: var(--rose);   }
+.adm-btn-reject:hover  { background: rgba(240,96,144,0.28); }
+.adm-btn-edit    { background: rgba(64,224,200,0.12);  color: var(--teal);   }
+.adm-btn-edit:hover    { background: rgba(64,224,200,0.24); }
 .adm-btn-bill    { background: rgba(144,128,240,0.12); color: var(--violet); }
-.adm-btn-bill:hover    { background: rgba(144,128,240,0.22); }
+.adm-btn-bill:hover    { background: rgba(144,128,240,0.24); }
 .adm-btn-primary {
-  background: var(--gold);
-  color: var(--ink);
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 13px;
+  background: var(--gold); color: var(--ink);
+  padding: 9px 20px; border-radius: 8px; font-size: 13px;
 }
 .adm-btn-primary:hover { opacity: 0.88; }
 .adm-btn-ghost {
   background: var(--ink-3);
   border: 1px solid var(--border-2);
   color: var(--text-2);
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 13px;
+  padding: 9px 20px; border-radius: 8px; font-size: 13px;
 }
 .adm-btn-ghost:hover { border-color: var(--gold); color: var(--gold); }
 
-/* ── MINI STATS ── */
-.adm-mini-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.adm-mini-stat {
-  background: var(--ink-3);
-  border-radius: 10px;
-  padding: 14px;
-}
-.adm-mini-stat-val {
-  font-size: 22px;
-  font-weight: 800;
-  margin-bottom: 3px;
-}
-.adm-mini-stat-label {
-  font-size: 10px;
-  color: var(--text-3);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-/* ── CHECKIN/OUT TODAY ── */
+/* ─────────────────────────────────────────
+   TODAY PANEL
+───────────────────────────────────────── */
 .adm-today-list { display: flex; flex-direction: column; gap: 10px; }
 .adm-today-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: flex; align-items: center; justify-content: space-between;
   padding: 10px 14px;
   background: var(--ink-3);
   border-radius: 8px;
@@ -402,28 +441,24 @@
 .adm-today-item.checkout { border-left-color: var(--rose);  }
 .adm-today-name { font-size: 13px; font-weight: 600; color: var(--text); }
 .adm-today-room { font-size: 11px; color: var(--text-3); margin-top: 1px; }
-.adm-today-time {
-  font-size: 11px;
-  font-family: var(--font-mono);
-  color: var(--text-3);
-}
+.adm-today-time { font-size: 11px; font-family: var(--font-mono); color: var(--text-3); }
 
-/* ── QUICK ACTIONS ── */
+/* ─────────────────────────────────────────
+   QUICK ACTIONS
+───────────────────────────────────────── */
 .adm-quick-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
 .adm-quick-btn {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  display: flex; align-items: center; gap: 10px;
   padding: 14px;
   background: var(--ink-3);
   border: 1px solid var(--border);
   border-radius: 10px;
   cursor: pointer;
-  transition: all 0.18s;
+  transition: border-color 0.18s, color 0.18s, background 0.18s;
   font-family: var(--font-disp);
   color: var(--text-2);
 }
@@ -431,151 +466,158 @@
 .adm-quick-icon  { font-size: 20px; }
 .adm-quick-label { font-size: 12px; font-weight: 600; }
 
-/* ── MODAL ── */
+/* ─────────────────────────────────────────
+   ROOM STATUS ROWS
+───────────────────────────────────────── */
+.adm-room-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 4px;
+}
+.adm-room-name {
+  font-size: 12px; font-weight: 600; color: var(--text-2);
+  min-width: 100px; max-width: 120px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.adm-room-bar-wrap {
+  flex: 1; height: 6px; background: var(--ink-3);
+  border-radius: 3px; overflow: hidden;
+}
+.adm-room-bar {
+  height: 100%; border-radius: 3px;
+  transition: width 1s ease;
+}
+.adm-room-pct  { font-size: 11px; font-family: var(--font-mono); color: var(--text-3); min-width: 30px; text-align: right; }
+.adm-room-status {
+  font-size: 10px; font-weight: 700; padding: 2px 8px;
+  border-radius: 100px; white-space: nowrap;
+}
+.adm-room-status.booked  { background: rgba(240,96,144,0.15);  color: var(--rose);  }
+.adm-room-status.vacant  { background: rgba(80,216,144,0.15);  color: var(--green); }
+.adm-room-status.pending { background: rgba(240,192,96,0.15);  color: var(--gold);  }
+
+/* ─────────────────────────────────────────
+   MODAL
+───────────────────────────────────────── */
 .adm-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.7);
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.72);
   backdrop-filter: blur(4px);
-  z-index: 200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  z-index: 300;
+  display: flex; align-items: center; justify-content: center;
   padding: 20px;
 }
 .adm-modal {
   background: var(--ink-2);
   border: 1px solid var(--border-2);
   border-radius: var(--radius-lg);
-  width: 100%;
-  max-width: 560px;
-  max-height: 90vh;
-  overflow-y: auto;
+  width: 100%; max-width: 560px;
+  max-height: 90vh; overflow-y: auto;
 }
 .adm-modal-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: flex; align-items: center; justify-content: space-between;
   padding: 20px 24px;
   border-bottom: 1px solid var(--border);
 }
-.adm-modal-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text);
-}
+.adm-modal-title { font-size: 15px; font-weight: 700; color: var(--text); }
 .adm-modal-close {
-  background: none;
-  border: none;
-  color: var(--text-3);
-  font-size: 20px;
-  cursor: pointer;
-  line-height: 1;
-  padding: 4px;
+  background: none; border: none; color: var(--text-3);
+  font-size: 22px; cursor: pointer; line-height: 1; padding: 4px;
 }
 .adm-modal-close:hover { color: var(--rose); }
 .adm-modal-body {
   padding: 20px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  display: flex; flex-direction: column; gap: 14px;
 }
-.adm-modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+.adm-modal-foot {
+  display: flex; justify-content: flex-end; gap: 10px;
   padding: 16px 24px;
   border-top: 1px solid var(--border);
 }
 
-.adm-field { display: flex; flex-direction: column; gap: 5px; }
-.adm-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+/* ─────────────────────────────────────────
+   FORM FIELDS (inside modal)
+───────────────────────────────────────── */
+.adm-field      { display: flex; flex-direction: column; gap: 5px; }
+.adm-field-row  { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .adm-field-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: var(--text-3);
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-3);
 }
 .adm-input {
-  background: var(--ink-3);
-  border: 1px solid var(--border-2);
-  border-radius: 8px;
-  padding: 10px 14px;
-  font-size: 13px;
-  font-family: var(--font-disp);
-  color: var(--text);
-  outline: none;
+  background: var(--ink-3); border: 1px solid var(--border-2);
+  border-radius: 8px; padding: 10px 14px;
+  font-size: 13px; font-family: var(--font-disp);
+  color: var(--text); outline: none; width: 100%;
   transition: border-color 0.2s;
-  width: 100%;
 }
-.adm-input:focus { border-color: var(--gold); }
+.adm-input:focus  { border-color: var(--gold); }
 .adm-input::placeholder { color: var(--text-3); }
 .adm-select {
-  background: var(--ink-3);
-  border: 1px solid var(--border-2);
-  border-radius: 8px;
-  padding: 10px 14px;
-  font-size: 13px;
-  font-family: var(--font-disp);
-  color: var(--text);
-  outline: none;
-  width: 100%;
+  background: var(--ink-3); border: 1px solid var(--border-2);
+  border-radius: 8px; padding: 10px 14px;
+  font-size: 13px; font-family: var(--font-disp);
+  color: var(--text); outline: none; width: 100%;
 }
 
-/* ── ROOM STATUS ── */
-.adm-rooms-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
+/* ─────────────────────────────────────────
+   BILL RECEIPT
+───────────────────────────────────────── */
+.adm-bill { display: flex; flex-direction: column; gap: 10px; }
+.adm-bill-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 0; border-bottom: 1px solid var(--border);
 }
-.adm-room-card {
-  background: var(--ink-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-  transition: border-color 0.2s;
+.adm-bill-row:last-child { border-bottom: none; }
+.adm-bill-key  { font-size: 12px; color: var(--text-3); }
+.adm-bill-val  { font-size: 13px; font-weight: 600; color: var(--text); font-family: var(--font-mono); }
+.adm-bill-total {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  background: var(--gold-dim); border: 1px solid var(--gold-glow);
+  border-radius: 10px; padding: 14px 16px;
 }
-.adm-room-card:hover { border-color: var(--border-2); }
-.adm-room-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 6px;
-}
-.adm-room-price {
-  font-size: 18px;
-  font-weight: 800;
-  color: var(--gold);
-  font-family: var(--font-mono);
-  margin-bottom: 8px;
-}
-.adm-room-meta {
-  font-size: 11px;
-  color: var(--text-3);
-  font-family: var(--font-mono);
-}
-.adm-room-status {
-  display: inline-block;
-  margin-top: 10px;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 3px 9px;
-  border-radius: 100px;
-}
-.adm-room-status.available { background: rgba(80,216,144,0.15); color: var(--green); }
-.adm-room-status.occupied  { background: rgba(240,96,144,0.15); color: var(--rose); }
+.adm-bill-total-label { font-size: 13px; font-weight: 700; color: var(--text); }
+.adm-bill-total-val   { font-size: 24px; font-weight: 800; color: var(--gold); font-family: var(--font-mono); }
 
-/* ── RESPONSIVE ── */
-@media (max-width: 1024px) {
+/* ─────────────────────────────────────────
+   LOADING / EMPTY STATES
+───────────────────────────────────────── */
+.adm-loading {
+  display: flex; align-items: center; justify-content: center;
+  gap: 10px; padding: 40px 0; color: var(--text-3);
+  font-size: 13px;
+}
+.adm-spinner {
+  width: 20px; height: 20px;
+  border: 2px solid var(--border-2);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.adm-empty {
+  text-align: center; padding: 48px 0;
+}
+.adm-empty-icon { font-size: 36px; margin-bottom: 10px; }
+.adm-empty-text { font-size: 14px; color: var(--text-3); }
+
+/* ─────────────────────────────────────────
+   RESPONSIVE
+───────────────────────────────────────── */
+@media (max-width: 1100px) {
   .adm-stats-grid { grid-template-columns: repeat(2, 1fr); }
   .adm-panels-3   { grid-template-columns: 1fr; }
 }
 @media (max-width: 768px) {
-  .adm-body            { grid-template-columns: 1fr; }
-  .adm-sidebar         { display: none; }
-  .adm-stats-grid      { grid-template-columns: 1fr 1fr; }
+  .adm-body       { grid-template-columns: 1fr; }
+  .adm-sidebar    { display: none; }
+  .adm-stats-grid { grid-template-columns: 1fr 1fr; }
   .adm-panels, .adm-panels-3 { grid-template-columns: 1fr; }
-  .adm-content         { padding: 20px 16px; }
-  .adm-field-row       { grid-template-columns: 1fr; }
+  .adm-content    { padding: 20px 16px; }
+  .adm-field-row  { grid-template-columns: 1fr; }
+  .adm-topbar     { padding: 0 16px; }
+  .adm-topbar-meta { display: none; }
+}
+@media (max-width: 480px) {
+  .adm-stats-grid { grid-template-columns: 1fr; }
+  .adm-quick-actions { grid-template-columns: 1fr; }
 }
