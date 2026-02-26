@@ -12,12 +12,12 @@ import { FaWifi, FaTv, FaCoffee, FaWind, FaSwimmingPool } from 'react-icons/fa';
 import { MdOutlineKitchen } from 'react-icons/md';
 
 const facilitiesConfig = [
-  { name: 'Free WiFi',     icon: <FaWifi />,           color: '#dbeafe', border: '#bfdbfe', iconColor: '#2563eb' },
-  { name: 'Fridge',        icon: <MdOutlineKitchen />, color: '#dcfce7', border: '#bbf7d0', iconColor: '#16a34a' },
-  { name: 'Flat-Screen TV',icon: <FaTv />,             color: '#fef9c3', border: '#fde68a', iconColor: '#d97706' },
-  { name: 'Hair Dryer',    icon: <FaWind />,           color: '#ede9fe', border: '#c4b5fd', iconColor: '#7c3aed' },
-  { name: 'Coffee Maker',  icon: <FaCoffee />,         color: '#fce7f3', border: '#fbcfe8', iconColor: '#db2777' },
-  { name: 'Swimming Pool', icon: <FaSwimmingPool />,   color: '#e0f2fe', border: '#bae6fd', iconColor: '#0284c7' },
+  { name: 'Free WiFi',      icon: <FaWifi />,           color: '#dbeafe', border: '#bfdbfe', iconColor: '#2563eb' },
+  { name: 'Fridge',         icon: <MdOutlineKitchen />, color: '#dcfce7', border: '#bbf7d0', iconColor: '#16a34a' },
+  { name: 'Flat-Screen TV', icon: <FaTv />,             color: '#fef9c3', border: '#fde68a', iconColor: '#d97706' },
+  { name: 'Hair Dryer',     icon: <FaWind />,           color: '#ede9fe', border: '#c4b5fd', iconColor: '#7c3aed' },
+  { name: 'Coffee Maker',   icon: <FaCoffee />,         color: '#fce7f3', border: '#fbcfe8', iconColor: '#db2777' },
+  { name: 'Swimming Pool',  icon: <FaSwimmingPool />,   color: '#e0f2fe', border: '#bae6fd', iconColor: '#0284c7' },
 ];
 
 const rules = [
@@ -32,13 +32,14 @@ const RoomDetails = () => {
     pname, setPName,
     email, setEmail,
     phone, setPhone,
-    checkInDate, setCheckInDate,
-    checkOutDate, setCheckOutDate,
-    adults, setAdults,
-    kids, setKids,
+    checkInDate,
+    checkOutDate,
+    adults,
+    kids,
     handleReservation,
     rooms,
-    setSelectedRoomId, setSelectedRoomName,
+    setSelectedRoomId,
+    setSelectedRoomName,
   } = useContext(RoomContext);
 
   const { id } = useParams();
@@ -54,15 +55,19 @@ const RoomDetails = () => {
   if (!room) {
     return (
       <section style={{ padding: '96px 0', textAlign: 'center' }}>
-        <h2 style={{ fontFamily: 'var(--font-disp)', fontSize: '32px', marginBottom: '12px' }}>Room Not Found</h2>
-        <p style={{ color: 'var(--text-muted)' }}>We couldn't find the room you're looking for.</p>
+        <h2 style={{ fontFamily: 'var(--font-disp)', fontSize: '32px', marginBottom: '12px' }}>
+          Room Not Found
+        </h2>
+        <p style={{ color: 'var(--text-muted)' }}>
+          We couldn't find the room you're looking for.
+        </p>
       </section>
     );
   }
 
-  const { name, description, imageLg, imageData, price } = room;
+  const { name, description, imageData, price } = room;
 
-  // Match local asset images from data.js by position (Firebase rooms are ordered same as data.js)
+  // Match local asset images from data.js by name
   const localRoom = roomData.find((r) => r.name === name) || roomData[0];
   const roomImage = imageData || localRoom?.imageLg || localRoom?.image || null;
 
@@ -81,7 +86,8 @@ const RoomDetails = () => {
 
           {/* ── LEFT COLUMN ── */}
           <div style={leftColStyle}>
-            {/* Room title + desc */}
+
+            {/* Room title + description */}
             <div style={{ marginBottom: '28px' }}>
               <span className="section-tag">Accommodation</span>
               <h2 style={roomTitleStyle}>{name}</h2>
@@ -110,7 +116,6 @@ const RoomDetails = () => {
                       background: f.color,
                       border: `1.5px solid ${f.border}`,
                     }}
-                    className="facility-card"
                   >
                     <div style={{ ...facilityIconWrapStyle, color: f.iconColor }}>
                       {f.icon}
@@ -127,6 +132,7 @@ const RoomDetails = () => {
 
             {/* ── BOOKING FORM ── */}
             <div style={formCardStyle}>
+
               {/* Form header */}
               <div style={formHeaderStyle}>
                 <div>
@@ -144,6 +150,7 @@ const RoomDetails = () => {
 
               {/* Fields */}
               <div style={formBodyStyle}>
+
                 <div style={fieldGroupStyle}>
                   <label style={labelStyle}>Full Name</label>
                   <input
@@ -152,7 +159,6 @@ const RoomDetails = () => {
                     value={pname}
                     onChange={(e) => setPName(e.target.value)}
                     style={inputStyle}
-                    className="form-input"
                   />
                 </div>
 
@@ -164,7 +170,6 @@ const RoomDetails = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     style={inputStyle}
-                    className="form-input"
                   />
                 </div>
 
@@ -176,11 +181,10 @@ const RoomDetails = () => {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     style={inputStyle}
-                    className="form-input"
                   />
                 </div>
 
-                {/* Date row */}
+                {/* Date row — uses overflow:hidden (date pickers use a portal, safe) */}
                 <div style={dateRowStyle}>
                   <div style={{ flex: 1 }}>
                     <label style={labelStyle}>Check In</label>
@@ -192,17 +196,18 @@ const RoomDetails = () => {
                   </div>
                 </div>
 
-                {/* Guests row */}
+                {/* Guests row — uses overflow:visible so Headless UI menus can render */}
                 <div style={dateRowStyle}>
                   <div style={{ flex: 1 }}>
                     <label style={labelStyle}>Adults</label>
-                    <div style={datePickerWrapStyle}><AdultsDropdown /></div>
+                    <div style={dropdownWrapStyle}><AdultsDropdown /></div>
                   </div>
                   <div style={{ flex: 1 }}>
                     <label style={labelStyle}>Kids</label>
-                    <div style={datePickerWrapStyle}><KidsDropdown /></div>
+                    <div style={dropdownWrapStyle}><KidsDropdown /></div>
                   </div>
                 </div>
+
               </div>
 
               {/* CTA buttons */}
@@ -210,12 +215,12 @@ const RoomDetails = () => {
                 <button onClick={handleReservation} className="btn-primary" style={bookBtnStyle}>
                   Book Now — ${price}/night
                 </button>
-                <a href="tel:+18338551818" style={callBtnStyle} className="btn-outline-dark">
+                <a href="tel:+18338551818" style={callBtnStyle}>
                   📞 Call to Reserve
                 </a>
               </div>
 
-              {/* Trust row */}
+              {/* Trust pills */}
               <div style={trustRowStyle}>
                 {['Free Cancellation', 'No Hidden Fees', 'Instant Confirm'].map(t => (
                   <span key={t} style={trustPillStyle}>✓ {t}</span>
@@ -225,7 +230,9 @@ const RoomDetails = () => {
 
             {/* ── HOTEL RULES ── */}
             <div style={rulesCardStyle}>
-              <h3 style={sectionHeadStyle}>Hotel <em className="accent-em">Rules</em></h3>
+              <h3 style={sectionHeadStyle}>
+                Hotel <em className="accent-em">Rules</em>
+              </h3>
               <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                 {rules.map((rule) => (
                   <li key={rule} style={ruleItemStyle}>
@@ -239,11 +246,30 @@ const RoomDetails = () => {
           </div>
         </div>
       </div>
+
+      {/* Inline hover styles for facility cards */}
+      <style>{`
+        .facility-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        @media (max-width: 768px) {
+          .room-details-layout {
+            flex-direction: column !important;
+          }
+          .room-details-right {
+            position: static !important;
+            min-width: 0 !important;
+          }
+        }
+      `}</style>
     </section>
   );
 };
 
-/* ── Styles ── */
+/* ─────────────────────────────────────────
+   STYLES
+───────────────────────────────────────── */
 
 const layoutStyle = {
   display: 'flex',
@@ -268,6 +294,7 @@ const rightColStyle = {
   top: '88px',
 };
 
+/* Room info */
 const roomTitleStyle = {
   fontFamily: 'var(--font-disp)',
   fontSize: 'clamp(28px, 4vw, 42px)',
@@ -303,6 +330,7 @@ const sectionHeadStyle = {
   margin: '8px 0 20px',
 };
 
+/* Facilities */
 const facilitiesGridStyle = {
   display: 'grid',
   gridTemplateColumns: 'repeat(3, 1fr)',
@@ -344,7 +372,7 @@ const formCardStyle = {
   borderRadius: 'var(--radius-lg)',
   border: '1.5px solid var(--border)',
   boxShadow: 'var(--shadow-md)',
-  overflow: 'hidden',
+  overflow: 'visible', // must be visible so dropdowns inside can overflow
 };
 
 const formHeaderStyle = {
@@ -353,6 +381,7 @@ const formHeaderStyle = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
+  borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0',
 };
 
 const formBadgeStyle = {
@@ -435,6 +464,7 @@ const dateRowStyle = {
   gap: '12px',
 };
 
+/* For date pickers — overflow:hidden is fine, they render via portal */
 const datePickerWrapStyle = {
   border: '1.5px solid var(--border)',
   borderRadius: 'var(--radius)',
@@ -442,6 +472,18 @@ const datePickerWrapStyle = {
   background: 'var(--bg)',
   overflow: 'hidden',
   marginTop: '5px',
+};
+
+/* For Headless UI dropdowns — must be overflow:visible so the menu can render outside */
+const dropdownWrapStyle = {
+  border: '1.5px solid var(--border)',
+  borderRadius: 'var(--radius)',
+  height: '44px',
+  background: 'var(--bg)',
+  overflow: 'visible',
+  marginTop: '5px',
+  position: 'relative',
+  zIndex: 10,
 };
 
 const formFooterStyle = {
@@ -471,6 +513,7 @@ const callBtnStyle = {
   fontFamily: 'var(--font-body)',
   textDecoration: 'none',
   transition: 'border-color 0.2s, color 0.2s',
+  cursor: 'pointer',
 };
 
 const trustRowStyle = {
