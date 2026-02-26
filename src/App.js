@@ -6,7 +6,7 @@ import Footer from './components/Footer';
 //pages
 import Home from './pages/Home';
 import RoomDetails from './pages/RoomDetails';
-import AdminDashboard from './pages/AdminDashboard';
+import AdminDashboard from './pages/admin/AdminDashboard';
 import GalleryView from './pages/GalleryView';
 import Reservation from './pages/admin/Reservation'
 
