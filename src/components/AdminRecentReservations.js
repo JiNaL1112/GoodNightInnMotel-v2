@@ -8,6 +8,27 @@ import { RoomContext } from '../context/RoomContext';
 import emailjs from '@emailjs/browser';
 
 const AVATAR_COLORS = ['#f0c060','#40e0c8','#f06090','#9080f0','#50d890','#60b0f0'];
+const PAGE_SIZE = 8;
+
+// ── Sort value extractors per column ─────────────────────────────
+const SORT_COLS = {
+  guest:    r => r.pname?.toLowerCase() || '',
+  room:     r => r.roomName?.toLowerCase() || '',
+  roomNo:   r => (r.roomNumber || '').toString().padStart(6, '0'),
+  checkIn:  r => (r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn || 0)).getTime(),
+  checkOut: r => (r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut || 0)).getTime(),
+};
+
+// ── Double-arrow sort indicator ───────────────────────────────────
+const SortArrow = ({ col, sortCol, sortDir }) => {
+  const active = sortCol === col;
+  return (
+    <span style={{ display: 'inline-flex', flexDirection: 'column', marginLeft: 5, gap: 1, verticalAlign: 'middle', opacity: active ? 1 : 0.3 }}>
+      <span style={{ fontSize: 7, lineHeight: 1, color: active && sortDir === 'asc'  ? 'var(--gold)' : 'var(--text-3)' }}>▲</span>
+      <span style={{ fontSize: 7, lineHeight: 1, color: active && sortDir === 'desc' ? 'var(--gold)' : 'var(--text-3)' }}>▼</span>
+    </span>
+  );
+};
 
 const AdminRecentReservations = () => {
   const {
@@ -19,19 +40,33 @@ const AdminRecentReservations = () => {
     selectedRoomName, setSelectedRoomName,
   } = useContext(RoomContext);
 
-  const [reservations,       setReservations]       = useState([]);
-  const [loading,            setLoading]            = useState(true);
-  const [showModal,          setShowModal]          = useState(false);
-  const [isEditing,          setIsEditing]          = useState(false);
-  const [editTarget,         setEditTarget]         = useState(null);
-  const [roomNumber,         setRoomNumber]         = useState('');
-  const [billModal,          setBillModal]          = useState(false);
-  const [billDetails,        setBillDetails]        = useState(null);
-  const [activeTab,          setActiveTab]          = useState('pending'); // 'pending' | 'confirmed'
-  const [saving,             setSaving]             = useState(false);
-  const [sendingEmail,       setSendingEmail]       = useState(false);
+  const [reservations,   setReservations]   = useState([]);
+  const [loading,        setLoading]        = useState(true);
+  const [showModal,      setShowModal]      = useState(false);
+  const [isEditing,      setIsEditing]      = useState(false);
+  const [editTarget,     setEditTarget]     = useState(null);
+  const [roomNumber,     setRoomNumber]     = useState('');
+  const [billModal,      setBillModal]      = useState(false);
+  const [billDetails,    setBillDetails]    = useState(null);
+  const [activeTab,      setActiveTab]      = useState('pending');
+  const [saving,         setSaving]         = useState(false);
+  const [sendingEmail,   setSendingEmail]   = useState(false);
+
+  // ── Filter state ──────────────────────────────────────────────
+  const [search,         setSearch]         = useState('');
+  const [filterRoom,     setFilterRoom]     = useState('');
+  const [filterFrom,     setFilterFrom]     = useState('');
+  const [filterTo,       setFilterTo]       = useState('');
+
+  // ── Sort state ────────────────────────────────────────────────
+  const [sortCol,        setSortCol]        = useState('checkIn');
+  const [sortDir,        setSortDir]        = useState('desc');
+
+  // ── Pagination state ──────────────────────────────────────────
+  const [page,           setPage]           = useState(1);
 
   useEffect(() => { fetchReservations(); }, []);
+  useEffect(() => { setPage(1); }, [activeTab, search, filterRoom, filterFrom, filterTo, sortCol, sortDir]);
 
   const fetchReservations = async () => {
     try {
@@ -41,6 +76,16 @@ const AdminRecentReservations = () => {
       setReservations(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (err) { console.error(err); }
     finally       { setLoading(false); }
+  };
+
+  // Click same col → flip direction. Click new col → asc
+  const handleSort = (col) => {
+    if (sortCol === col) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortCol(col);
+      setSortDir('asc');
+    }
   };
 
   const handleConfirm = async (id) => {
@@ -95,18 +140,15 @@ const AdminRecentReservations = () => {
     const roomList = roomSnap.docs.map(d => ({ ...d.data(), id: d.id }));
     const room     = roomList.find(r => r.id === res.roomId);
     if (!room) return;
-
     const checkIn  = res.checkIn?.toDate  ? res.checkIn.toDate()  : new Date(res.checkIn);
     const checkOut = res.checkOut?.toDate ? res.checkOut.toDate() : new Date(res.checkOut);
     const nights   = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
     const base     = room.price * nights;
     const hst      = base * 0.13;
-    const total    = base + hst;
-
     setBillDetails({
       guest: res.pname, roomName: room.name, roomNumber: res.roomNumber || 'N/A',
       checkIn: checkIn.toDateString(), checkOut: checkOut.toDateString(),
-      nights, roomPrice: room.price, baseAmount: base, hstAmount: hst, totalAmount: total,
+      nights, roomPrice: room.price, baseAmount: base, hstAmount: hst, totalAmount: base + hst,
       email: res.email,
     });
     setBillModal(true);
@@ -131,21 +173,91 @@ const AdminRecentReservations = () => {
     finally { setSendingEmail(false); }
   };
 
-  const pending   = reservations.filter(r => r.status !== 'booked');
-  const confirmed = reservations.filter(r => r.status === 'booked');
-  const shown     = activeTab === 'pending' ? pending : confirmed;
-
   const fmtDate = (ts) => {
     if (!ts) return '—';
     const d = ts?.toDate ? ts.toDate() : new Date(ts);
     return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
+  // ── Pipeline: tab → filter → sort → paginate ─────────────────
+  const pending   = reservations.filter(r => r.status !== 'booked');
+  const confirmed = reservations.filter(r => r.status === 'booked');
+  const tabList   = activeTab === 'pending' ? pending : confirmed;
+
+  const roomNames = [...new Set(reservations.map(r => r.roomName).filter(Boolean))].sort();
+
+  const filtered = tabList.filter(r => {
+    const q = search.toLowerCase();
+    if (q && !r.pname?.toLowerCase().includes(q) && !r.email?.toLowerCase().includes(q)) return false;
+    if (filterRoom && r.roomName !== filterRoom) return false;
+    if (filterFrom) {
+      const ci = r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn);
+      if (ci < new Date(filterFrom)) return false;
+    }
+    if (filterTo) {
+      const co = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut);
+      if (co > new Date(filterTo + 'T23:59:59')) return false;
+    }
+    return true;
+  });
+
+  const sorted = [...filtered].sort((a, b) => {
+    const getter = SORT_COLS[sortCol];
+    if (!getter) return 0;
+    const av = getter(a), bv = getter(b);
+    if (av < bv) return sortDir === 'asc' ? -1 : 1;
+    if (av > bv) return sortDir === 'asc' ?  1 : -1;
+    return 0;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const shown      = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const hasFilters = search || filterRoom || filterFrom || filterTo;
+  const clearFilters = () => { setSearch(''); setFilterRoom(''); setFilterFrom(''); setFilterTo(''); };
+
+  // ── Reusable sortable <th> ────────────────────────────────────
+  const SortTh = ({ col, label }) => (
+    <th
+      onClick={() => handleSort(col)}
+      style={{
+        padding: '10px 14px',
+        textAlign: 'left',
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: '1.5px',
+        textTransform: 'uppercase',
+        color: sortCol === col ? 'var(--gold)' : 'var(--text-3)',
+        whiteSpace: 'nowrap',
+        cursor: 'pointer',
+        userSelect: 'none',
+        transition: 'color 0.15s',
+      }}
+      onMouseEnter={e => { if (sortCol !== col) e.currentTarget.style.color = 'var(--text-2)'; }}
+      onMouseLeave={e => { if (sortCol !== col) e.currentTarget.style.color = 'var(--text-3)'; }}
+    >
+      {label}
+      <SortArrow col={col} sortCol={sortCol} sortDir={sortDir} />
+    </th>
+  );
+
+  const filterInputSt = {
+    background: 'var(--ink-3)',
+    border: '1px solid var(--border-2)',
+    borderRadius: 8,
+    padding: '7px 11px',
+    fontSize: 12,
+    fontFamily: 'var(--font-disp)',
+    color: 'var(--text)',
+    outline: 'none',
+  };
+
   return (
     <>
       <div className="adm-panel" style={{ marginBottom: 20 }}>
+
+        {/* ── Tabs + Add Button ── */}
         <div className="adm-panel-head">
-          <div style={{ display: 'flex', gap: 0 }}>
+          <div style={{ display: 'flex', gap: 4 }}>
             {['pending','confirmed'].map(tab => (
               <button
                 key={tab}
@@ -155,8 +267,12 @@ const AdminRecentReservations = () => {
                   padding: '6px 16px', borderRadius: 6,
                   fontFamily: 'var(--font-disp)', fontSize: 12, fontWeight: 700,
                   letterSpacing: 1, textTransform: 'uppercase',
-                  background: activeTab === tab ? (tab === 'pending' ? 'rgba(240,192,96,0.15)' : 'rgba(80,216,144,0.12)') : 'transparent',
-                  color: activeTab === tab ? (tab === 'pending' ? 'var(--gold)' : 'var(--green)') : 'var(--text-3)',
+                  background: activeTab === tab
+                    ? (tab === 'pending' ? 'rgba(240,192,96,0.15)' : 'rgba(80,216,144,0.12)')
+                    : 'transparent',
+                  color: activeTab === tab
+                    ? (tab === 'pending' ? 'var(--gold)' : 'var(--green)')
+                    : 'var(--text-3)',
                   transition: 'all 0.15s',
                 }}
               >
@@ -165,32 +281,78 @@ const AdminRecentReservations = () => {
             ))}
           </div>
           {activeTab === 'confirmed' && (
-            <button className="adm-btn-primary adm-btn" onClick={openAdd}>+ Add Booking</button>
+            <button className="adm-btn adm-btn-primary adm-btn" onClick={openAdd}>+ Add Booking</button>
           )}
         </div>
 
+        {/* ── Filter Bar ── */}
+        <div style={{
+          display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
+          background: 'var(--ink-3)', borderRadius: 10,
+          padding: '12px 14px', marginBottom: 16,
+          border: '1px solid var(--border)',
+        }}>
+          <div style={{ position: 'relative', flex: '1 1 180px', minWidth: 160 }}>
+            <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--text-3)', pointerEvents: 'none' }}>🔍</span>
+            <input
+              style={{ ...filterInputSt, paddingLeft: 28, width: '100%', boxSizing: 'border-box' }}
+              placeholder="Search guest or email…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+
+          <select style={{ ...filterInputSt, flex: '1 1 140px', minWidth: 130 }} value={filterRoom} onChange={e => setFilterRoom(e.target.value)}>
+            <option value="">All Rooms</option>
+            {roomNames.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '1 1 150px', minWidth: 140 }}>
+            <span style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)' }}>From</span>
+            <input type="date" style={{ ...filterInputSt, flex: 1 }} value={filterFrom} onChange={e => setFilterFrom(e.target.value)} />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '1 1 150px', minWidth: 140 }}>
+            <span style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)' }}>To</span>
+            <input type="date" style={{ ...filterInputSt, flex: 1 }} value={filterTo} onChange={e => setFilterTo(e.target.value)} />
+          </div>
+
+          {hasFilters && (
+            <button onClick={clearFilters} style={{ ...filterInputSt, border: '1px solid var(--rose)', color: 'var(--rose)', background: 'rgba(240,96,144,0.08)', cursor: 'pointer', fontWeight: 700, whiteSpace: 'nowrap', padding: '7px 14px' }}>
+              ✕ Clear
+            </button>
+          )}
+
+          <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', marginLeft: 'auto' }}>
+            {sorted.length} result{sorted.length !== 1 ? 's' : ''}
+          </span>
+        </div>
+
+        {/* ── Table ── */}
         <div className="adm-table-wrap">
           {loading ? (
             <div className="adm-loading"><div className="adm-spinner" /><span>Loading reservations…</span></div>
           ) : shown.length === 0 ? (
             <div className="adm-empty">
-              <div className="adm-empty-icon">{activeTab === 'pending' ? '🎉' : '📋'}</div>
+              <div className="adm-empty-icon">{hasFilters ? '🔍' : activeTab === 'pending' ? '🎉' : '📋'}</div>
               <div className="adm-empty-text">
-                {activeTab === 'pending' ? 'No pending requests!' : 'No confirmed reservations yet'}
+                {hasFilters ? 'No reservations match your filters.' : activeTab === 'pending' ? 'No pending requests!' : 'No confirmed reservations yet'}
               </div>
             </div>
           ) : (
             <table className="adm-table">
               <thead>
                 <tr>
-                  <th>Guest</th>
-                  <th>Room</th>
-                  <th>Room No.</th>
-                  <th>Check-in</th>
-                  <th>Check-out</th>
-                  <th>Guests</th>
-                  <th>Status</th>
-                  <th>Actions</th>
+                  {/* ↓ Sortable columns */}
+                  <SortTh col="guest"    label="Guest"     />
+                  <SortTh col="room"     label="Room"      />
+                  <SortTh col="roomNo"   label="Room No."  />
+                  <SortTh col="checkIn"  label="Check-in"  />
+                  <SortTh col="checkOut" label="Check-out" />
+                  {/* Non-sortable */}
+                  <th style={{ padding: '10px 14px', fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>Guests</th>
+                  <th style={{ padding: '10px 14px', fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>Status</th>
+                  <th style={{ padding: '10px 14px', fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -198,11 +360,7 @@ const AdminRecentReservations = () => {
                   <tr key={r.id}>
                     <td>
                       <div className="adm-guest-cell">
-                        <div
-                          className="adm-avatar"
-                          style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] + '22',
-                                   color: AVATAR_COLORS[i % AVATAR_COLORS.length] }}
-                        >
+                        <div className="adm-avatar" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] + '22', color: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
                           {r.pname?.charAt(0) || '?'}
                         </div>
                         <div>
@@ -230,9 +388,9 @@ const AdminRecentReservations = () => {
                           </>
                         ) : (
                           <>
-                            <button className="adm-btn adm-btn-edit"    onClick={() => openEdit(r)}>Edit</button>
-                            <button className="adm-btn adm-btn-bill"    onClick={() => generateBill(r)}>Receipt</button>
-                            <button className="adm-btn adm-btn-reject"  onClick={() => handleDelete(r.id)}>Remove</button>
+                            <button className="adm-btn adm-btn-edit"   onClick={() => openEdit(r)}>Edit</button>
+                            <button className="adm-btn adm-btn-bill"   onClick={() => generateBill(r)}>Receipt</button>
+                            <button className="adm-btn adm-btn-reject" onClick={() => handleDelete(r.id)}>Remove</button>
                           </>
                         )}
                       </div>
@@ -243,9 +401,43 @@ const AdminRecentReservations = () => {
             </table>
           )}
         </div>
+
+        {/* ── Pagination ── */}
+        {!loading && sorted.length > PAGE_SIZE && (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '14px 4px 2px',
+            borderTop: '1px solid var(--border)',
+            marginTop: 12,
+          }}>
+            <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
+              Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, sorted.length)} of {sorted.length}
+            </span>
+
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} style={pageBtnStyle(page === 1)}>← Prev</button>
+
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                .reduce((acc, p, idx, arr) => {
+                  if (idx > 0 && p - arr[idx - 1] > 1) acc.push('…');
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((p, idx) =>
+                  p === '…'
+                    ? <span key={`e-${idx}`} style={{ fontSize: 12, color: 'var(--text-3)', padding: '0 4px' }}>…</span>
+                    : <button key={p} onClick={() => setPage(p)} style={pageNumStyle(p === page)}>{p}</button>
+                )
+              }
+
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} style={pageBtnStyle(page === totalPages)}>Next →</button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Add / Edit Modal */}
+      {/* ── Add / Edit Modal ── */}
       {showModal && (
         <div className="adm-modal-overlay">
           <div className="adm-modal">
@@ -296,7 +488,7 @@ const AdminRecentReservations = () => {
                 <div className="adm-field-row">
                   <div className="adm-field">
                     <label className="adm-field-label">Room</label>
-                    <select className="adm-select" value={selectedRoomId} onChange={e => {
+                    <select className="adm-input" value={selectedRoomId} onChange={e => {
                       const sel = rooms.find(r => r.id === e.target.value);
                       setSelectedRoomId(sel?.id || ''); setSelectedRoomName(sel?.name || '');
                     }} required>
@@ -321,7 +513,7 @@ const AdminRecentReservations = () => {
         </div>
       )}
 
-      {/* Bill Modal */}
+      {/* ── Bill Modal ── */}
       {billModal && billDetails && (
         <div className="adm-modal-overlay">
           <div className="adm-modal">
@@ -360,8 +552,8 @@ const AdminRecentReservations = () => {
               </div>
             </div>
             <div className="adm-modal-foot">
-              <button className="adm-btn adm-btn-ghost"    onClick={() => setBillModal(false)}>Close</button>
-              <button className="adm-btn adm-btn-primary"  onClick={sendBill} disabled={sendingEmail}>
+              <button className="adm-btn adm-btn-ghost"   onClick={() => setBillModal(false)}>Close</button>
+              <button className="adm-btn adm-btn-primary" onClick={sendBill} disabled={sendingEmail}>
                 {sendingEmail ? 'Sending…' : '✉ Send to Guest'}
               </button>
             </div>
@@ -371,5 +563,22 @@ const AdminRecentReservations = () => {
     </>
   );
 };
+
+// ── Pagination button styles ──────────────────────────────────────
+const pageBtnStyle = (disabled) => ({
+  background: 'var(--ink-3)', border: '1px solid var(--border-2)',
+  color: disabled ? 'var(--text-3)' : 'var(--text-2)',
+  borderRadius: 6, padding: '5px 12px', fontSize: 11, fontWeight: 700,
+  fontFamily: 'var(--font-disp)', cursor: disabled ? 'not-allowed' : 'pointer',
+  opacity: disabled ? 0.4 : 1, transition: 'all 0.15s',
+});
+
+const pageNumStyle = (active) => ({
+  background: active ? 'var(--gold-dim)' : 'var(--ink-3)',
+  border: `1px solid ${active ? 'var(--gold-glow)' : 'var(--border-2)'}`,
+  color: active ? 'var(--gold)' : 'var(--text-3)',
+  borderRadius: 6, padding: '5px 10px', fontSize: 11, fontWeight: 700,
+  fontFamily: 'var(--font-mono)', cursor: 'pointer', minWidth: 30, transition: 'all 0.15s',
+});
 
 export default AdminRecentReservations;
