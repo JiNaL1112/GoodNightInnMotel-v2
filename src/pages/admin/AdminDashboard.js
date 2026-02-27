@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
+import { useNavigate } from 'react-router-dom';
 import ScrollToTop from '../../components/ScrollToTop';
 
 import AdminStats              from '../../components/AdminStats';
@@ -7,6 +8,7 @@ import AdminRevenue            from '../../components/AdminRevenue';
 import AdminTodayPanel         from '../../components/AdminTodayPanel';
 import AdminRecentReservations from '../../components/AdminRecentReservations';
 import AdminQuickActions       from '../../components/AdminQuickActions';
+import SeedReservations       from '../../components/SeedReservations';
 import { AuthContext }         from '../../context/AuthContext';
 
 import './admin-dashboard.css';
@@ -20,21 +22,28 @@ const NAV = [
 
 const AdminDashboard = () => {
   const [activeNav, setActiveNav] = useState('overview');
+  const [now, setNow]             = useState(new Date());   // ← live clock fix
   const { user, logout }          = useContext(AuthContext);
-  const now = new Date();
+  const navigate                  = useNavigate();           // ← single navigate instance
+
+  // Live clock — updates every minute
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Hide the global site header/footer while on admin pages
   useEffect(() => {
-    const siteHeader = document.querySelector('.site-header');
+    const siteHeader   = document.querySelector('.site-header');
     const mobileDrawer = document.querySelector('.mobile-drawer');
-    const siteFooter = document.querySelector('.site-footer');
-    if (siteHeader) siteHeader.style.display = 'none';
+    const siteFooter   = document.querySelector('.site-footer');
+    if (siteHeader)   siteHeader.style.display   = 'none';
     if (mobileDrawer) mobileDrawer.style.display = 'none';
-    if (siteFooter)  siteFooter.style.display  = 'none';
+    if (siteFooter)   siteFooter.style.display   = 'none';
     return () => {
-      if (siteHeader) siteHeader.style.display = '';
+      if (siteHeader)   siteHeader.style.display   = '';
       if (mobileDrawer) mobileDrawer.style.display = '';
-      if (siteFooter)  siteFooter.style.display  = '';
+      if (siteFooter)   siteFooter.style.display   = '';
     };
   }, []);
 
@@ -42,7 +51,7 @@ const AdminDashboard = () => {
     <div className="adm-shell">
       <ScrollToTop />
 
-      {/* ── Admin Top Bar (replaces global Header on this page) ── */}
+      {/* ── Admin Top Bar ── */}
       <div className="adm-topbar">
         <span className="adm-topbar-title">
           <span className="adm-topbar-title-icon">🌙</span>
@@ -91,6 +100,8 @@ const AdminDashboard = () => {
 
         {/* ── Sidebar ── */}
         <aside className="adm-sidebar">
+
+          {/* In-page navigation (tab switching — no route change needed) */}
           <div className="adm-nav-section">
             <div className="adm-nav-label">Navigation</div>
             {NAV.map(n => (
@@ -107,23 +118,24 @@ const AdminDashboard = () => {
 
           <div className="adm-nav-divider" />
 
+          {/* Management — navigate to separate routes using useNavigate (no full reload) */}
           <div className="adm-nav-section">
             <div className="adm-nav-label">Management</div>
             <button
               className="adm-nav-item"
-              onClick={() => window.location.href = '/admin/reservation'}
+              onClick={() => navigate('/admin/reservation')}
             >
               <span className="adm-nav-icon">📝</span> Reservations
             </button>
             <button
               className="adm-nav-item"
-              onClick={() => window.location.href = '/admin/rooms'}
+              onClick={() => navigate('/admin/rooms')}
             >
               <span className="adm-nav-icon">🛏️</span> Manage Rooms
             </button>
             <button
               className="adm-nav-item"
-              onClick={() => window.location.href = '/admin/picturemanagement'}
+              onClick={() => navigate('/admin/picturemanagement')}
             >
               <span className="adm-nav-icon">🖼️</span> Pictures
             </button>
@@ -131,9 +143,13 @@ const AdminDashboard = () => {
 
           <div className="adm-nav-divider" />
 
+          {/* External links — window.open / tel: are fine here */}
           <div className="adm-nav-section">
             <div className="adm-nav-label">External</div>
-            <button className="adm-nav-item" onClick={() => window.open('/', '_blank')}>
+            <button
+              className="adm-nav-item"
+              onClick={() => window.open('/', '_blank')}
+            >
               <span className="adm-nav-icon">🌐</span> View Site
             </button>
             <a
@@ -144,14 +160,19 @@ const AdminDashboard = () => {
               <span className="adm-nav-icon">📞</span> Call Guest
             </a>
           </div>
+
         </aside>
 
         {/* ── Main Content ── */}
         <main className="adm-content">
 
           {/* OVERVIEW */}
+          
+
+          {/* OVERVIEW */}
           {activeNav === 'overview' && (
             <>
+              <SeedReservations />
               <AdminStats />
               <div className="adm-panels-3">
                 <AdminRevenue />
