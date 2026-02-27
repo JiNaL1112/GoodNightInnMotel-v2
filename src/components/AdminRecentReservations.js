@@ -16,7 +16,6 @@ const ROOM_SLOTS = {
 };
 const PAGE_SIZE = 8;
 
-// ── Sort value extractors ─────────────────────────────────────────
 const SORT_COLS = {
   guest:    r => r.pname?.toLowerCase() || '',
   room:     r => r.roomName?.toLowerCase() || '',
@@ -25,23 +24,40 @@ const SORT_COLS = {
   checkOut: r => (r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut || 0)).getTime(),
 };
 
-// ── Option B: compute effective display status from dates ─────────
-// Returns 'checked-out' if Firestore status is 'booked' but checkOut < today
-// This means old seed data + past bookings are automatically "checked out" visually
+// ── 4-state status engine ─────────────────────────────────────────────────────
+// 'pending'     → waiting for admin to confirm
+// 'upcoming'    → confirmed, but checkIn date is still in the future
+// 'in-house'    → admin manually checked them in (checkedInAt exists) OR checkIn ≤ today and NOT yet checked out
+// 'checked-out' → manually checked out, or checkOut date has passed
 const getEffectiveStatus = (r) => {
   if (r.status === 'checked-out') return 'checked-out';
+
   if (r.status === 'booked') {
     const today    = new Date(); today.setHours(0, 0, 0, 0);
+    const checkIn  = r.checkIn?.toDate  ? r.checkIn.toDate()  : new Date(r.checkIn  || 0);
     const checkOut = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut || 0);
-    checkOut.setHours(0, 0, 0, 0);
-    if (checkOut < today) return 'checked-out';
-    return 'booked';
+    const ciDay    = new Date(checkIn);  ciDay.setHours(0, 0, 0, 0);
+    const coDay    = new Date(checkOut); coDay.setHours(0, 0, 0, 0);
+
+    // Auto-move to checked-out if checkout date has passed
+    if (coDay < today) return 'checked-out';
+
+    // If admin manually checked them in → in-house
+    if (r.checkedInAt) return 'in-house';
+
+    // Check-in day has arrived but admin hasn't checked them in yet → still upcoming
+    // (room is NOT physically occupied until admin clicks Check In)
+    if (ciDay > today) return 'upcoming';
+
+    // checkIn date is today or past but no manual check-in yet
+    // We keep it as 'upcoming' so room isn't shown as occupied until admin acts
+    return 'upcoming';
   }
-  // ✅ Everything else (null, undefined, 'pending', any other value) → pending
+
   return 'pending';
 };
 
-// ── Sort arrows ───────────────────────────────────────────────────
+// ── Sort arrows ───────────────────────────────────────────────────────────────
 const SortArrow = ({ col, sortCol, sortDir }) => {
   const active = sortCol === col;
   return (
@@ -73,18 +89,12 @@ const AdminRecentReservations = () => {
   const [activeTab,      setActiveTab]      = useState('pending');
   const [saving,         setSaving]         = useState(false);
   const [sendingEmail,   setSendingEmail]   = useState(false);
-
-  // ── Filter state ──────────────────────────────────────────────
   const [search,         setSearch]         = useState('');
   const [filterRoom,     setFilterRoom]     = useState('');
   const [filterFrom,     setFilterFrom]     = useState('');
   const [filterTo,       setFilterTo]       = useState('');
-
-  // ── Sort state ────────────────────────────────────────────────
   const [sortCol,        setSortCol]        = useState('checkIn');
-  const [sortDir,        setSortDir]        = useState('desc');
-
-  // ── Pagination ────────────────────────────────────────────────
+  const [sortDir,        setSortDir]        = useState('asc');
   const [page,           setPage]           = useState(1);
 
   useEffect(() => { fetchReservations(); }, []);
@@ -93,11 +103,10 @@ const AdminRecentReservations = () => {
   const fetchReservations = async () => {
     try {
       setLoading(true);
-      const q    = query(collection(db, 'reservations'), orderBy('createdAt', 'desc'));
-      const snap = await getDocs(q);
+      const snap = await getDocs(query(collection(db, 'reservations'), orderBy('createdAt', 'desc')));
       setReservations(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (err) { console.error(err); }
-    finally       { setLoading(false); }
+    finally { setLoading(false); }
   };
 
   const handleSort = (col) => {
@@ -105,12 +114,20 @@ const AdminRecentReservations = () => {
     else { setSortCol(col); setSortDir('asc'); }
   };
 
+  // Pending → confirmed upcoming
   const handleConfirm = async (id) => {
     await updateDoc(doc(db, 'reservations', id), { status: 'booked' });
     fetchReservations();
   };
 
-  // ── Option A: manual Check Out — sets status: 'checked-out' in Firestore ──
+  // Admin marks guest as physically arrived → sets checkedInAt, moves to In-house
+  const handleCheckIn = async (r) => {
+    if (!window.confirm(`Check in ${r.pname}? This confirms the guest has arrived and the room is now occupied.`)) return;
+    await updateDoc(doc(db, 'reservations', r.id), { checkedInAt: new Date() });
+    fetchReservations();
+  };
+
+  // Admin marks guest as departed → sets status: checked-out
   const handleCheckOut = async (r) => {
     if (!window.confirm(`Check out ${r.pname}? This will mark the reservation as completed.`)) return;
     await updateDoc(doc(db, 'reservations', r.id), {
@@ -126,9 +143,7 @@ const AdminRecentReservations = () => {
     fetchReservations();
   };
 
-  const openAdd = () => {
-    setIsEditing(false); setEditTarget(null); setRoomNumber(''); setShowModal(true);
-  };
+  const openAdd = () => { setIsEditing(false); setEditTarget(null); setRoomNumber(''); setShowModal(true); };
 
   const openEdit = (res) => {
     setIsEditing(true); setEditTarget(res);
@@ -142,36 +157,30 @@ const AdminRecentReservations = () => {
   };
 
   const handleFormSubmit = async (e) => {
-    e.preventDefault();
-    setSaving(true);
+    e.preventDefault(); setSaving(true);
     const data = {
-      pname, email, phone,
-      checkIn: checkInDate, checkOut: checkOutDate,
-      adults, kids,
-      roomId: selectedRoomId, roomName: selectedRoomName,
+      pname, email, phone, checkIn: checkInDate, checkOut: checkOutDate,
+      adults, kids, roomId: selectedRoomId, roomName: selectedRoomName,
       roomNumber, status: 'booked',
       [isEditing ? 'updatedAt' : 'createdAt']: new Date(),
     };
     try {
-      if (isEditing && editTarget?.id)
-        await updateDoc(doc(db, 'reservations', editTarget.id), data);
-      else
-        await addDoc(collection(db, 'reservations'), data);
+      if (isEditing && editTarget?.id) await updateDoc(doc(db, 'reservations', editTarget.id), data);
+      else await addDoc(collection(db, 'reservations'), data);
       setShowModal(false); fetchReservations();
     } catch (err) { console.error(err); }
-    finally       { setSaving(false); }
+    finally { setSaving(false); }
   };
 
   const generateBill = async (res) => {
     const roomSnap = await getDocs(collection(db, 'rooms'));
-    const roomList = roomSnap.docs.map(d => ({ ...d.data(), id: d.id }));
-    const room     = roomList.find(r => r.id === res.roomId);
+    const room = roomSnap.docs.map(d => ({ ...d.data(), id: d.id })).find(r => r.id === res.roomId);
     if (!room) return;
     const checkIn  = res.checkIn?.toDate  ? res.checkIn.toDate()  : new Date(res.checkIn);
     const checkOut = res.checkOut?.toDate ? res.checkOut.toDate() : new Date(res.checkOut);
-    const nights   = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
-    const base     = room.price * nights;
-    const hst      = base * 0.13;
+    const nights = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
+    const base = room.price * nights;
+    const hst  = base * 0.13;
     setBillDetails({
       guest: res.pname, roomName: room.name, roomNumber: res.roomNumber || 'N/A',
       checkIn: checkIn.toDateString(), checkOut: checkOut.toDateString(),
@@ -186,13 +195,10 @@ const AdminRecentReservations = () => {
     setSendingEmail(true);
     try {
       await emailjs.send('service_d3cy1e9', 'template_11t5n5a', {
-        guest: billDetails.guest, room_name: billDetails.roomName,
-        room_number: billDetails.roomNumber, check_in: billDetails.checkIn,
-        check_out: billDetails.checkOut, nights: billDetails.nights,
-        rate:     `$${billDetails.roomPrice.toFixed(2)}`,
-        subtotal: `$${billDetails.baseAmount.toFixed(2)}`,
-        hst:      `$${billDetails.hstAmount.toFixed(2)}`,
-        total:    `$${billDetails.totalAmount.toFixed(2)}`,
+        guest: billDetails.guest, room_name: billDetails.roomName, room_number: billDetails.roomNumber,
+        check_in: billDetails.checkIn, check_out: billDetails.checkOut, nights: billDetails.nights,
+        rate: `$${billDetails.roomPrice.toFixed(2)}`, subtotal: `$${billDetails.baseAmount.toFixed(2)}`,
+        hst: `$${billDetails.hstAmount.toFixed(2)}`, total: `$${billDetails.totalAmount.toFixed(2)}`,
         to_email: billDetails.email,
       }, '8nzBG6xAhz4eIyVij');
       alert('Receipt sent!');
@@ -206,18 +212,19 @@ const AdminRecentReservations = () => {
     return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  // ── Derived pipeline ─────────────────────────────────────────
-  // Apply Option B: tag each reservation with its effective status
-  const tagged = reservations.map(r => ({ ...r, _effectiveStatus: getEffectiveStatus(r) }));
+  // ── Tag each reservation ──────────────────────────────────────────────────
+  const tagged = reservations.map(r => ({ ...r, _eff: getEffectiveStatus(r) }));
 
-  const pending    = tagged.filter(r => r._effectiveStatus === 'pending');
-  const confirmed  = tagged.filter(r => r._effectiveStatus === 'booked');       // in-house today / future
-  const checkedOut = tagged.filter(r => r._effectiveStatus === 'checked-out');  // past or manually checked out
+  const pendingList    = tagged.filter(r => r._eff === 'pending');
+  const upcomingList   = tagged.filter(r => r._eff === 'upcoming');
+  const inHouseList    = tagged.filter(r => r._eff === 'in-house');
+  const checkedOutList = tagged.filter(r => r._eff === 'checked-out');
 
   const tabList =
-    activeTab === 'pending'     ? pending    :
-    activeTab === 'confirmed'   ? confirmed  :
-    checkedOut;
+    activeTab === 'pending'    ? pendingList    :
+    activeTab === 'upcoming'   ? upcomingList   :
+    activeTab === 'inhouse'    ? inHouseList    :
+    checkedOutList;
 
   const roomNames = [...new Set(reservations.map(r => r.roomName).filter(Boolean))].sort();
 
@@ -250,40 +257,96 @@ const AdminRecentReservations = () => {
   const hasFilters = search || filterRoom || filterFrom || filterTo;
   const clearFilters = () => { setSearch(''); setFilterRoom(''); setFilterFrom(''); setFilterTo(''); };
 
-  // ── Tab config ────────────────────────────────────────────────
+  // ── Tab config — 4 tabs ────────────────────────────────────────────────────
   const TABS = [
-    { id: 'pending',    label: `⏳ Pending`,     count: pending.length,    activeColor: 'var(--gold)',   activeBg: 'rgba(240,192,96,0.15)'  },
-    { id: 'confirmed',  label: `✅ Confirmed`,   count: confirmed.length,  activeColor: 'var(--green)',  activeBg: 'rgba(80,216,144,0.12)'  },
-    { id: 'checkedout', label: `🏁 Checked Out`, count: checkedOut.length, activeColor: 'var(--teal)',   activeBg: 'rgba(64,224,200,0.12)'  },
+    { id: 'pending',    label: '⏳ Pending',     count: pendingList.length,    activeColor: '#f0c060', activeBg: 'rgba(240,192,96,0.15)'  },
+    { id: 'upcoming',   label: '🕐 Upcoming',    count: upcomingList.length,   activeColor: '#60b0f0', activeBg: 'rgba(96,176,240,0.15)'  },
+    { id: 'inhouse',    label: '✅ In-house',    count: inHouseList.length,    activeColor: '#50d890', activeBg: 'rgba(80,216,144,0.12)'  },
+    { id: 'checkedout', label: '🏁 Checked Out', count: checkedOutList.length, activeColor: '#40e0c8', activeBg: 'rgba(64,224,200,0.12)'  },
   ];
 
-  // ── Sortable <th> ─────────────────────────────────────────────
+  // ── Status badge ───────────────────────────────────────────────────────────
+  const StatusBadge = ({ eff }) => {
+    const map = {
+      'pending':     { label: '⏳ Pending',     bg: 'rgba(240,192,96,0.12)',  color: '#f0c060' },
+      'upcoming':    { label: '🕐 Upcoming',    bg: 'rgba(96,176,240,0.12)',  color: '#60b0f0' },
+      'in-house':    { label: '✅ In-house',    bg: 'rgba(80,216,144,0.15)',  color: '#50d890' },
+      'checked-out': { label: '🏁 Checked Out', bg: 'rgba(64,224,200,0.12)', color: '#40e0c8' },
+    };
+    const s = map[eff] || map['pending'];
+    return (
+      <span style={{
+        display: 'inline-block', padding: '3px 10px', borderRadius: 99, fontSize: 11,
+        fontWeight: 700, background: s.bg, color: s.color,
+        border: `1px solid ${s.color}30`, whiteSpace: 'nowrap',
+      }}>{s.label}</span>
+    );
+  };
+
+  // ── Action buttons per status ──────────────────────────────────────────────
+  const ActionButtons = ({ r }) => {
+    const eff = r._eff;
+    if (eff === 'pending') return (
+      <>
+        <button className="adm-btn adm-btn-confirm" onClick={() => handleConfirm(r.id)}>Confirm</button>
+        <button className="adm-btn adm-btn-reject"  onClick={() => handleDelete(r.id)}>Reject</button>
+      </>
+    );
+    if (eff === 'upcoming') return (
+      <>
+        {/* Check In button — always visible for upcoming so admin can act any time on/after arrival day */}
+        <button
+          className="adm-btn"
+          style={{ background: 'rgba(80,216,144,0.15)', color: '#50d890', fontWeight: 700, border: '1px solid rgba(80,216,144,0.3)', whiteSpace: 'nowrap' }}
+          onClick={() => handleCheckIn(r)}
+        >
+          🏨 Check In
+        </button>
+        <button className="adm-btn adm-btn-edit"   onClick={() => openEdit(r)}>Edit</button>
+        <button className="adm-btn adm-btn-reject"  onClick={() => handleDelete(r.id)}>Cancel</button>
+      </>
+    );
+    if (eff === 'in-house') return (
+      <>
+        <button
+          className="adm-btn"
+          style={{ background: 'rgba(240,96,144,0.15)', color: '#f06090', fontWeight: 700, border: '1px solid rgba(240,96,144,0.3)', whiteSpace: 'nowrap' }}
+          onClick={() => handleCheckOut(r)}
+        >
+          🏁 Check Out
+        </button>
+        <button className="adm-btn adm-btn-edit" onClick={() => openEdit(r)}>Edit</button>
+        <button className="adm-btn adm-btn-bill" onClick={() => generateBill(r)}>Receipt</button>
+      </>
+    );
+    if (eff === 'checked-out') return (
+      <>
+        <button className="adm-btn adm-btn-bill"   onClick={() => generateBill(r)}>Receipt</button>
+        <button className="adm-btn adm-btn-reject"  onClick={() => handleDelete(r.id)}>Remove</button>
+      </>
+    );
+    return null;
+  };
+
+  // ── Sortable th ────────────────────────────────────────────────────────────
   const SortTh = ({ col, label }) => (
-    <th
-      onClick={() => handleSort(col)}
-      style={{
-        padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700,
-        letterSpacing: '1.5px', textTransform: 'uppercase', whiteSpace: 'nowrap',
-        cursor: 'pointer', userSelect: 'none', transition: 'color 0.15s',
-        color: sortCol === col ? 'var(--gold)' : 'var(--text-3)',
-      }}
-      onMouseEnter={e => { if (sortCol !== col) e.currentTarget.style.color = 'var(--text-2)'; }}
-      onMouseLeave={e => { if (sortCol !== col) e.currentTarget.style.color = 'var(--text-3)'; }}
-    >
+    <th onClick={() => handleSort(col)} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', color: sortCol === col ? 'var(--gold)' : 'var(--text-3)' }}>
       {label}<SortArrow col={col} sortCol={sortCol} sortDir={sortDir} />
     </th>
   );
-
   const staticTh = (label) => (
-    <th key={label} style={{ padding: '10px 14px', fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
-      {label}
-    </th>
+    <th style={{ padding: '10px 14px', fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{label}</th>
   );
 
-  const filterInputSt = {
-    background: 'var(--ink-3)', border: '1px solid var(--border-2)',
-    borderRadius: 8, padding: '7px 11px', fontSize: 12,
-    fontFamily: 'var(--font-disp)', color: 'var(--text)', outline: 'none',
+  const inp = { background: 'var(--ink-3)', border: '1px solid var(--border-2)', borderRadius: 8, padding: '7px 11px', fontSize: 12, fontFamily: 'var(--font-disp)', color: 'var(--text)', outline: 'none' };
+  const pageBtnSt = (dis) => ({ padding: '5px 12px', borderRadius: 6, border: '1px solid var(--border-2)', background: 'var(--ink-3)', color: dis ? 'var(--text-3)' : 'var(--text)', cursor: dis ? 'not-allowed' : 'pointer', fontSize: 11, opacity: dis ? 0.5 : 1 });
+
+  // Info text per tab
+  const tabInfo = {
+    pending:    '⏳ Awaiting admin confirmation. Room is NOT blocked until confirmed.',
+    upcoming:   '🕐 Confirmed bookings arriving in future. Room is reserved but NOT yet occupied — click Check In when guest arrives.',
+    inhouse:    '✅ Guest is currently in the room. Room is occupied.',
+    checkedout: '🏁 Completed stays.',
   };
 
   return (
@@ -292,101 +355,66 @@ const AdminRecentReservations = () => {
 
         {/* ── Tabs + Add Button ── */}
         <div className="adm-panel-head">
-          <div style={{ display: 'flex', gap: 4 }}>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
             {TABS.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                style={{
-                  border: 'none', cursor: 'pointer',
-                  padding: '6px 16px', borderRadius: 6,
-                  fontFamily: 'var(--font-disp)', fontSize: 12, fontWeight: 700,
-                  letterSpacing: 1, textTransform: 'uppercase',
-                  background: activeTab === tab.id ? tab.activeBg : 'transparent',
-                  color:      activeTab === tab.id ? tab.activeColor : 'var(--text-3)',
-                  transition: 'all 0.15s',
-                }}
-              >
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+                border: 'none', cursor: 'pointer', padding: '6px 14px', borderRadius: 6,
+                fontFamily: 'var(--font-disp)', fontSize: 12, fontWeight: 700,
+                letterSpacing: 1, textTransform: 'uppercase',
+                background: activeTab === tab.id ? tab.activeBg : 'transparent',
+                color:      activeTab === tab.id ? tab.activeColor : 'var(--text-3)',
+                transition: 'all 0.15s',
+              }}>
                 {tab.label} ({tab.count})
               </button>
             ))}
           </div>
-          {activeTab === 'confirmed' && (
-            <button className="adm-btn adm-btn-primary adm-btn" onClick={openAdd}>+ Add Booking</button>
+          {(activeTab === 'upcoming' || activeTab === 'inhouse') && (
+            <button className="adm-btn adm-btn-primary" onClick={openAdd}>+ Add Booking</button>
           )}
         </div>
 
-        {/* ── Option B notice bar (only on confirmed tab) ── */}
-        {activeTab === 'confirmed' && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            background: 'rgba(64,224,200,0.06)', border: '1px solid rgba(64,224,200,0.15)',
-            borderRadius: 8, padding: '8px 14px', marginBottom: 14,
-            fontSize: 11, color: 'var(--teal)', fontFamily: 'var(--font-mono)',
-          }}>
-            <span>ℹ</span>
-            <span>Showing active bookings only — guests whose check-out date has passed are automatically moved to <strong>Checked Out</strong>.</span>
-          </div>
-        )}
+        {/* ── Tab info bar ── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '8px 14px', marginBottom: 14, fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
+          <span>ℹ</span>
+          <span>{tabInfo[activeTab]}</span>
+        </div>
 
         {/* ── Filter Bar ── */}
-        <div style={{
-          display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
-          background: 'var(--ink-3)', borderRadius: 10,
-          padding: '12px 14px', marginBottom: 16,
-          border: '1px solid var(--border)',
-        }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', background: 'var(--ink-2)', borderRadius: 10, padding: '12px 14px', marginBottom: 16, border: '1px solid var(--border)' }}>
           <div style={{ position: 'relative', flex: '1 1 180px', minWidth: 160 }}>
             <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--text-3)', pointerEvents: 'none' }}>🔍</span>
-            <input
-              style={{ ...filterInputSt, paddingLeft: 28, width: '100%', boxSizing: 'border-box' }}
-              placeholder="Search guest or email…"
-              value={search} onChange={e => setSearch(e.target.value)}
-            />
+            <input style={{ ...inp, paddingLeft: 28, width: '100%', boxSizing: 'border-box' }} placeholder="Search guest or email…" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-
-          <select style={{ ...filterInputSt, flex: '1 1 140px', minWidth: 130 }} value={filterRoom} onChange={e => setFilterRoom(e.target.value)}>
+          <select style={{ ...inp, flex: '1 1 140px', minWidth: 130 }} value={filterRoom} onChange={e => setFilterRoom(e.target.value)}>
             <option value="">All Rooms</option>
             {roomNames.map(n => <option key={n} value={n}>{n}</option>)}
           </select>
-
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '1 1 150px', minWidth: 140 }}>
             <span style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)' }}>From</span>
-            <input type="date" style={{ ...filterInputSt, flex: 1 }} value={filterFrom} onChange={e => setFilterFrom(e.target.value)} />
+            <input type="date" style={{ ...inp, flex: 1 }} value={filterFrom} onChange={e => setFilterFrom(e.target.value)} />
           </div>
-
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '1 1 150px', minWidth: 140 }}>
             <span style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)' }}>To</span>
-            <input type="date" style={{ ...filterInputSt, flex: 1 }} value={filterTo} onChange={e => setFilterTo(e.target.value)} />
+            <input type="date" style={{ ...inp, flex: 1 }} value={filterTo} onChange={e => setFilterTo(e.target.value)} />
           </div>
-
           {hasFilters && (
-            <button onClick={clearFilters} style={{ ...filterInputSt, border: '1px solid var(--rose)', color: 'var(--rose)', background: 'rgba(240,96,144,0.08)', cursor: 'pointer', fontWeight: 700, whiteSpace: 'nowrap', padding: '7px 14px' }}>
-              ✕ Clear
-            </button>
+            <button onClick={clearFilters} style={{ ...inp, cursor: 'pointer', color: '#f06090', border: '1px solid rgba(240,96,144,0.3)' }}>✕ Clear</button>
           )}
-
-          <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', marginLeft: 'auto' }}>
-            {sorted.length} result{sorted.length !== 1 ? 's' : ''}
-          </span>
         </div>
 
         {/* ── Table ── */}
-        <div className="adm-table-wrap">
+        <div style={{ overflowX: 'auto' }}>
           {loading ? (
             <div className="adm-loading"><div className="adm-spinner" /><span>Loading reservations…</span></div>
           ) : shown.length === 0 ? (
             <div className="adm-empty">
-              <div className="adm-empty-icon">
-                {hasFilters ? '🔍' : activeTab === 'pending' ? '🎉' : activeTab === 'confirmed' ? '📋' : '🏁'}
-              </div>
+              <div className="adm-empty-icon">{hasFilters ? '🔍' : TABS.find(t => t.id === activeTab)?.label.split(' ')[0]}</div>
               <div className="adm-empty-text">
-                {hasFilters
-                  ? 'No reservations match your filters.'
-                  : activeTab === 'pending'
-                  ? 'No pending requests!'
-                  : activeTab === 'confirmed'
-                  ? 'No active stays right now.'
+                {hasFilters ? 'No reservations match your filters.'
+                  : activeTab === 'pending'    ? 'No pending requests — all clear!'
+                  : activeTab === 'upcoming'   ? 'No upcoming bookings.'
+                  : activeTab === 'inhouse'    ? 'No guests currently in-house.'
                   : 'No checked-out guests yet.'}
               </div>
             </div>
@@ -394,106 +422,47 @@ const AdminRecentReservations = () => {
             <table className="adm-table">
               <thead>
                 <tr>
-                  <SortTh col="guest"    label="Guest"     />
-                  <SortTh col="room"     label="Room"      />
-                  <SortTh col="roomNo"   label="Room No."  />
-                  <SortTh col="checkIn"  label="Check-in"  />
-                  <SortTh col="checkOut" label="Check-out" />
+                  <SortTh col="guest"    label="Guest"    />
+                  <SortTh col="room"     label="Room"     />
+                  <SortTh col="roomNo"   label="Room No." />
+                  <SortTh col="checkIn"  label="Check-in" />
+                  <SortTh col="checkOut" label="Check-out"/>
                   {staticTh('Guests')}
                   {staticTh('Status')}
                   {staticTh('Actions')}
                 </tr>
               </thead>
               <tbody>
-                {shown.map((r, i) => {
-                  const effStatus = r._effectiveStatus;
-                  const isCheckedOut = effStatus === 'checked-out';
-                  const isAutoCheckedOut = isCheckedOut && r.status !== 'checked-out'; // derived, not in Firestore yet
-
-                  return (
-                    <tr key={r.id} style={{ opacity: isCheckedOut ? 0.75 : 1 }}>
-                      <td>
-                        <div className="adm-guest-cell">
-                          <div className="adm-avatar" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] + '22', color: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
-                            {r.pname?.charAt(0) || '?'}
-                          </div>
-                          <div>
-                            <div className="adm-guest-name">{r.pname}</div>
-                            <div className="adm-guest-email">{r.email}</div>
-                          </div>
+                {shown.map((r, i) => (
+                  <tr key={r.id}
+                    style={{ opacity: r._eff === 'checked-out' ? 0.7 : 1 }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <td>
+                      <div className="adm-guest-cell">
+                        <div className="adm-avatar" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] + '22', color: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
+                          {r.pname?.charAt(0) || '?'}
                         </div>
-                      </td>
-                      <td style={{ color: 'var(--text)' }}>{r.roomName}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--teal)' }}>{r.roomNumber || '—'}</td>
-                      <td>{fmtDate(r.checkIn)}</td>
-                      <td>{fmtDate(r.checkOut)}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)' }}>{r.adults}A {r.kids > 0 ? `${r.kids}K` : ''}</td>
-
-                      {/* ── Status badge ── */}
-                      <td>
-                        {effStatus === 'checked-out' ? (
-                          <div>
-                            <span className="adm-badge" style={{ background: 'rgba(64,224,200,0.12)', color: 'var(--teal)' }}>
-                              🏁 Checked Out
-                            </span>
-                            {/* Small "auto" label if derived from date, not yet saved to Firestore */}
-                            {isAutoCheckedOut && (
-                              <div style={{ fontSize: 9, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginTop: 3 }}>
-                                auto-detected
-                              </div>
-                            )}
-                          </div>
-                        ) : effStatus === 'booked' ? (
-                          <span className="adm-badge booked">✅ In-house</span>
-                        ) : (
-                          <span className="adm-badge pending">⏳ Pending</span>
-                        )}
-                      </td>
-
-                      {/* ── Actions ── */}
-                      <td>
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                          {effStatus === 'pending' && (
-                            <>
-                              <button className="adm-btn adm-btn-confirm" onClick={() => handleConfirm(r.id)}>Confirm</button>
-                              <button className="adm-btn adm-btn-reject"  onClick={() => handleDelete(r.id)}>Reject</button>
-                            </>
-                          )}
-
-                          {effStatus === 'booked' && (
-                            <>
-                              {/* Option A: Check Out button — only shown when checkOut date is today or past */}
-                              {(() => {
-                                const today    = new Date(); today.setHours(0,0,0,0);
-                                const checkOut = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut || 0);
-                                checkOut.setHours(0,0,0,0);
-                                return checkOut <= today ? (
-                                  <button
-                                    className="adm-btn"
-                                    style={{ background: 'rgba(64,224,200,0.15)', color: 'var(--teal)', fontWeight: 700 }}
-                                    onClick={() => handleCheckOut(r)}
-                                  >
-                                    🏁 Check Out
-                                  </button>
-                                ) : null;
-                              })()}
-                              <button className="adm-btn adm-btn-edit"   onClick={() => openEdit(r)}>Edit</button>
-                              <button className="adm-btn adm-btn-bill"   onClick={() => generateBill(r)}>Receipt</button>
-                              <button className="adm-btn adm-btn-reject" onClick={() => handleDelete(r.id)}>Remove</button>
-                            </>
-                          )}
-
-                          {effStatus === 'checked-out' && (
-                            <>
-                              <button className="adm-btn adm-btn-bill"   onClick={() => generateBill(r)}>Receipt</button>
-                              <button className="adm-btn adm-btn-reject" onClick={() => handleDelete(r.id)}>Remove</button>
-                            </>
-                          )}
+                        <div>
+                          <div className="adm-guest-name">{r.pname}</div>
+                          <div className="adm-guest-email">{r.email}</div>
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                      </div>
+                    </td>
+                    <td style={{ color: 'var(--text)' }}>{r.roomName}</td>
+                    <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--teal)' }}>{r.roomNumber || '—'}</td>
+                    <td>{fmtDate(r.checkIn)}</td>
+                    <td>{fmtDate(r.checkOut)}</td>
+                    <td style={{ fontFamily: 'var(--font-mono)' }}>{r.adults}A {r.kids > 0 ? `${r.kids}K` : ''}</td>
+                    <td><StatusBadge eff={r._eff} /></td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <ActionButtons r={r} />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           )}
@@ -501,108 +470,75 @@ const AdminRecentReservations = () => {
 
         {/* ── Pagination ── */}
         {!loading && sorted.length > PAGE_SIZE && (
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '14px 4px 2px', borderTop: '1px solid var(--border)', marginTop: 12,
-          }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 4px 2px', borderTop: '1px solid var(--border)', marginTop: 12 }}>
             <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
               Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, sorted.length)} of {sorted.length}
             </span>
             <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} style={pageBtnStyle(page === 1)}>← Prev</button>
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} style={pageBtnSt(page === 1)}>← Prev</button>
               {Array.from({ length: totalPages }, (_, i) => i + 1)
                 .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
-                .reduce((acc, p, idx, arr) => {
-                  if (idx > 0 && p - arr[idx - 1] > 1) acc.push('…');
-                  acc.push(p); return acc;
-                }, [])
-                .map((p, idx) =>
-                  p === '…'
-                    ? <span key={`e-${idx}`} style={{ fontSize: 12, color: 'var(--text-3)', padding: '0 4px' }}>…</span>
-                    : <button key={p} onClick={() => setPage(p)} style={pageNumStyle(p === page)}>{p}</button>
-                )
-              }
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} style={pageBtnStyle(page === totalPages)}>Next →</button>
+                .reduce((acc, p, idx, arr) => { if (idx > 0 && p - arr[idx-1] > 1) acc.push('…'); acc.push(p); return acc; }, [])
+                .map((p, idx) => p === '…'
+                  ? <span key={`e${idx}`} style={{ color: 'var(--text-3)', fontSize: 11, padding: '0 4px' }}>…</span>
+                  : <button key={p} onClick={() => setPage(p)} style={{ ...pageBtnSt(false), background: page === p ? 'var(--gold)' : 'var(--ink-3)', color: page === p ? '#000' : 'var(--text)', fontWeight: page === p ? 700 : 400 }}>{p}</button>
+                )}
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} style={pageBtnSt(page === totalPages)}>Next →</button>
             </div>
           </div>
         )}
       </div>
 
-      {/* ── Add / Edit Modal ── */}
+      {/* ── Add/Edit Modal ── */}
       {showModal && (
-        <div className="adm-modal-overlay">
-          <div className="adm-modal">
-            <div className="adm-modal-head">
-              <span className="adm-modal-title">{isEditing ? 'Edit Reservation' : 'Add Reservation'}</span>
-              <button className="adm-modal-close" onClick={() => setShowModal(false)}>×</button>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: 'var(--ink-1)', borderRadius: 16, width: '100%', maxWidth: 540, border: '1px solid var(--border-2)', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: '1px solid var(--border)' }}>
+              <span style={{ fontWeight: 700, fontSize: 16 }}>{isEditing ? 'Edit Booking' : 'Add Booking'}</span>
+              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-3)', fontSize: 22, cursor: 'pointer' }}>×</button>
             </div>
-            <form onSubmit={handleFormSubmit}>
-              <div className="adm-modal-body">
-                <div className="adm-field-row">
-                  <div className="adm-field">
-                    <label className="adm-field-label">Guest Name</label>
-                    <input className="adm-input" value={pname} onChange={e => setPName(e.target.value)} required placeholder="Full Name" />
-                  </div>
-                  <div className="adm-field">
-                    <label className="adm-field-label">Phone</label>
-                    <input className="adm-input" value={phone} onChange={e => setPhone(e.target.value)} required placeholder="+1 (xxx) xxx-xxxx" />
-                  </div>
+            <form onSubmit={handleFormSubmit} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {[['Guest Name', pname, setPName, 'text'], ['Email', email, setEmail, 'email'], ['Phone', phone, setPhone, 'tel']].map(([label, val, setter, type]) => (
+                <div key={label}>
+                  <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>{label}</div>
+                  <input required type={type} value={val} onChange={e => setter(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', ...inp }} />
                 </div>
-                <div className="adm-field">
-                  <label className="adm-field-label">Email</label>
-                  <input className="adm-input" type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="guest@email.com" />
+              ))}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                {[['Check-in', checkInDate, setCheckInDate], ['Check-out', checkOutDate, setCheckOutDate]].map(([label, val, setter]) => (
+                  <div key={label}>
+                    <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>{label}</div>
+                    <input required type="date" value={val ? new Date(val).toISOString().split('T')[0] : ''} onChange={e => setter(new Date(e.target.value))} style={{ width: '100%', boxSizing: 'border-box', ...inp }} />
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>Room Type</div>
+                  <select required value={selectedRoomId} onChange={e => { const sel = rooms.find(r => r.id === e.target.value); setSelectedRoomId(sel?.id || ''); setSelectedRoomName(sel?.name || ''); setRoomNumber(''); }} style={{ width: '100%', ...inp }}>
+                    <option value="">Select Room</option>
+                    {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                  </select>
                 </div>
-                <div className="adm-field-row">
-                  <div className="adm-field">
-                    <label className="adm-field-label">Check-in</label>
-                    <input className="adm-input" type="date"
-                      value={checkInDate ? new Date(checkInDate).toISOString().split('T')[0] : ''}
-                      onChange={e => setCheckInDate(new Date(e.target.value))} required />
-                  </div>
-                  <div className="adm-field">
-                    <label className="adm-field-label">Check-out</label>
-                    <input className="adm-input" type="date"
-                      value={checkOutDate ? new Date(checkOutDate).toISOString().split('T')[0] : ''}
-                      onChange={e => setCheckOutDate(new Date(e.target.value))} required />
-                  </div>
-                </div>
-                <div className="adm-field-row">
-                  <div className="adm-field">
-                    <label className="adm-field-label">Adults</label>
-                    <input className="adm-input" type="number" min={1} value={adults} onChange={e => setAdults(parseInt(e.target.value))} required />
-                  </div>
-                  <div className="adm-field">
-                    <label className="adm-field-label">Kids</label>
-                    <input className="adm-input" type="number" min={0} value={kids} onChange={e => setKids(parseInt(e.target.value))} required />
-                  </div>
-                </div>
-                <div className="adm-field-row">
-                  <div className="adm-field">
-  <label className="adm-field-label">Room</label>
-  <select className="adm-input" value={selectedRoomId} onChange={e => {
-    const sel = rooms.find(r => r.id === e.target.value);
-    setSelectedRoomId(sel?.id || '');
-    setSelectedRoomName(sel?.name || '');
-    setRoomNumber(''); // reset when room type changes
-  }} required>
-    <option value="">Select Room</option>
-    {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-  </select>
-</div>
-<div className="adm-field">
-  <label className="adm-field-label">Room Number</label>
-  <select className="adm-input" value={roomNumber} onChange={e => setRoomNumber(e.target.value)} required disabled={!selectedRoomName}>
-    <option value="">{selectedRoomName ? 'Select Number' : '— pick room first —'}</option>
-    {(ROOM_SLOTS[selectedRoomName] || []).map(n => (
-      <option key={n} value={n}>{n}</option>
-    ))}
-  </select>
-</div>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>Room Number</div>
+                  <select required value={roomNumber} onChange={e => setRoomNumber(e.target.value)} disabled={!selectedRoomName} style={{ width: '100%', ...inp, opacity: !selectedRoomName ? 0.5 : 1 }}>
+                    <option value="">{selectedRoomName ? 'Select Number' : '— pick room first —'}</option>
+                    {(ROOM_SLOTS[selectedRoomName] || []).map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
                 </div>
               </div>
-              <div className="adm-modal-foot">
-                <button type="button" className="adm-btn adm-btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
-                <button type="submit" className="adm-btn adm-btn-primary" disabled={saving}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                {[['Adults', adults, setAdults, 1], ['Kids', kids, setKids, 0]].map(([label, val, setter, min]) => (
+                  <div key={label}>
+                    <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>{label}</div>
+                    <input required type="number" min={min} value={val} onChange={e => setter(parseInt(e.target.value))} style={{ width: '100%', boxSizing: 'border-box', ...inp }} />
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+                <button type="button" onClick={() => setShowModal(false)} style={{ padding: '9px 20px', borderRadius: 8, border: '1px solid var(--border-2)', background: 'transparent', color: 'var(--text-3)', cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+                <button type="submit" disabled={saving} style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: 'var(--gold)', color: '#000', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', fontSize: 13, opacity: saving ? 0.7 : 1 }}>
                   {saving ? 'Saving…' : isEditing ? 'Update' : 'Add Booking'}
                 </button>
               </div>
@@ -611,48 +547,27 @@ const AdminRecentReservations = () => {
         </div>
       )}
 
-      {/* ── Bill Modal ── */}
+      {/* ── Receipt Modal ── */}
       {billModal && billDetails && (
-        <div className="adm-modal-overlay">
-          <div className="adm-modal">
-            <div className="adm-modal-head">
-              <span className="adm-modal-title">Guest Receipt</span>
-              <button className="adm-modal-close" onClick={() => setBillModal(false)}>×</button>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: 'var(--ink-1)', borderRadius: 16, width: '100%', maxWidth: 420, border: '1px solid var(--border-2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: '1px solid var(--border)' }}>
+              <span style={{ fontWeight: 700, fontSize: 16 }}>Guest Receipt</span>
+              <button onClick={() => setBillModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-3)', fontSize: 22, cursor: 'pointer' }}>×</button>
             </div>
-            <div className="adm-modal-body">
-              <div className="adm-bill">
-                {[
-                  ['Guest',     billDetails.guest],
-                  ['Room',      billDetails.roomName],
-                  ['Room No.',  billDetails.roomNumber],
-                  ['Check-in',  billDetails.checkIn],
-                  ['Check-out', billDetails.checkOut],
-                  ['Nights',    billDetails.nights],
-                  ['Rate',      `$${billDetails.roomPrice.toFixed(2)}/night`],
-                ].map(([k, v]) => (
-                  <div className="adm-bill-row" key={k}>
-                    <span className="adm-bill-key">{k}</span>
-                    <span className="adm-bill-val">{v}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="adm-bill-total" style={{ marginTop: 14 }}>
-                <div>
-                  <div className="adm-bill-total-label">Subtotal</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-                    HST (13%): ${billDetails.hstAmount.toFixed(2)}
-                  </div>
+            <div style={{ padding: 24 }}>
+              {[['Guest', billDetails.guest], ['Room', billDetails.roomName], ['Room No.', billDetails.roomNumber], ['Check-in', billDetails.checkIn], ['Check-out', billDetails.checkOut], ['Nights', billDetails.nights], ['Rate/night', `$${billDetails.roomPrice.toFixed(2)}`], ['Subtotal', `$${billDetails.baseAmount.toFixed(2)}`], ['HST (13%)', `$${billDetails.hstAmount.toFixed(2)}`]].map(([label, val]) => (
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+                  <span style={{ color: 'var(--text-3)' }}>{label}</span>
+                  <span style={{ fontWeight: 600 }}>{val}</span>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div className="adm-bill-total-val">${billDetails.totalAmount.toFixed(2)}</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-3)' }}>CAD incl. tax</div>
-                </div>
+              ))}
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0 0', fontSize: 16, fontWeight: 700 }}>
+                <span>Total</span>
+                <span style={{ color: 'var(--gold)' }}>${billDetails.totalAmount.toFixed(2)}</span>
               </div>
-            </div>
-            <div className="adm-modal-foot">
-              <button className="adm-btn adm-btn-ghost"   onClick={() => setBillModal(false)}>Close</button>
-              <button className="adm-btn adm-btn-primary" onClick={sendBill} disabled={sendingEmail}>
-                {sendingEmail ? 'Sending…' : '✉ Send to Guest'}
+              <button onClick={sendBill} disabled={sendingEmail} style={{ marginTop: 20, width: '100%', padding: 11, borderRadius: 8, border: 'none', background: 'var(--gold)', color: '#000', fontWeight: 700, cursor: sendingEmail ? 'not-allowed' : 'pointer', fontSize: 14, opacity: sendingEmail ? 0.7 : 1 }}>
+                {sendingEmail ? 'Sending…' : '📧 Email Receipt'}
               </button>
             </div>
           </div>
@@ -661,22 +576,5 @@ const AdminRecentReservations = () => {
     </>
   );
 };
-
-// ── Pagination styles ─────────────────────────────────────────────
-const pageBtnStyle = (disabled) => ({
-  background: 'var(--ink-3)', border: '1px solid var(--border-2)',
-  color: disabled ? 'var(--text-3)' : 'var(--text-2)',
-  borderRadius: 6, padding: '5px 12px', fontSize: 11, fontWeight: 700,
-  fontFamily: 'var(--font-disp)', cursor: disabled ? 'not-allowed' : 'pointer',
-  opacity: disabled ? 0.4 : 1, transition: 'all 0.15s',
-});
-
-const pageNumStyle = (active) => ({
-  background: active ? 'var(--gold-dim)' : 'var(--ink-3)',
-  border: `1px solid ${active ? 'var(--gold-glow)' : 'var(--border-2)'}`,
-  color: active ? 'var(--gold)' : 'var(--text-3)',
-  borderRadius: 6, padding: '5px 10px', fontSize: 11, fontWeight: 700,
-  fontFamily: 'var(--font-mono)', cursor: 'pointer', minWidth: 30, transition: 'all 0.15s',
-});
 
 export default AdminRecentReservations;
