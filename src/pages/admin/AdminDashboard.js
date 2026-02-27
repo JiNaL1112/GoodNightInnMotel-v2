@@ -8,7 +8,6 @@ import AdminRevenue            from '../../components/AdminRevenue';
 import AdminTodayPanel         from '../../components/AdminTodayPanel';
 import AdminRecentReservations from '../../components/AdminRecentReservations';
 import AdminQuickActions       from '../../components/AdminQuickActions';
-import SeedReservations       from '../../components/SeedReservations';
 import { AuthContext }         from '../../context/AuthContext';
 
 import './admin-dashboard.css';
@@ -172,7 +171,6 @@ const AdminDashboard = () => {
           {/* OVERVIEW */}
           {activeNav === 'overview' && (
             <>
-              <SeedReservations />
               <AdminStats />
               <div className="adm-panels-3">
                 <AdminRevenue />
