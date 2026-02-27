@@ -10,16 +10,32 @@ import emailjs from '@emailjs/browser';
 const AVATAR_COLORS = ['#f0c060','#40e0c8','#f06090','#9080f0','#50d890','#60b0f0'];
 const PAGE_SIZE = 8;
 
-// ── Sort value extractors per column ─────────────────────────────
+// ── Sort value extractors ─────────────────────────────────────────
 const SORT_COLS = {
   guest:    r => r.pname?.toLowerCase() || '',
   room:     r => r.roomName?.toLowerCase() || '',
   roomNo:   r => (r.roomNumber || '').toString().padStart(6, '0'),
-  checkIn:  r => (r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn || 0)).getTime(),
+  checkIn:  r => (r.checkIn?.toDate  ? r.checkIn.toDate()  : new Date(r.checkIn  || 0)).getTime(),
   checkOut: r => (r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut || 0)).getTime(),
 };
 
-// ── Double-arrow sort indicator ───────────────────────────────────
+// ── Option B: compute effective display status from dates ─────────
+// Returns 'checked-out' if Firestore status is 'booked' but checkOut < today
+// This means old seed data + past bookings are automatically "checked out" visually
+const getEffectiveStatus = (r) => {
+  if (r.status === 'checked-out') return 'checked-out';
+  if (r.status === 'booked') {
+    const today    = new Date(); today.setHours(0, 0, 0, 0);
+    const checkOut = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut || 0);
+    checkOut.setHours(0, 0, 0, 0);
+    if (checkOut < today) return 'checked-out';
+    return 'booked';
+  }
+  // ✅ Everything else (null, undefined, 'pending', any other value) → pending
+  return 'pending';
+};
+
+// ── Sort arrows ───────────────────────────────────────────────────
 const SortArrow = ({ col, sortCol, sortDir }) => {
   const active = sortCol === col;
   return (
@@ -62,7 +78,7 @@ const AdminRecentReservations = () => {
   const [sortCol,        setSortCol]        = useState('checkIn');
   const [sortDir,        setSortDir]        = useState('desc');
 
-  // ── Pagination state ──────────────────────────────────────────
+  // ── Pagination ────────────────────────────────────────────────
   const [page,           setPage]           = useState(1);
 
   useEffect(() => { fetchReservations(); }, []);
@@ -78,18 +94,23 @@ const AdminRecentReservations = () => {
     finally       { setLoading(false); }
   };
 
-  // Click same col → flip direction. Click new col → asc
   const handleSort = (col) => {
-    if (sortCol === col) {
-      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortCol(col);
-      setSortDir('asc');
-    }
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortCol(col); setSortDir('asc'); }
   };
 
   const handleConfirm = async (id) => {
     await updateDoc(doc(db, 'reservations', id), { status: 'booked' });
+    fetchReservations();
+  };
+
+  // ── Option A: manual Check Out — sets status: 'checked-out' in Firestore ──
+  const handleCheckOut = async (r) => {
+    if (!window.confirm(`Check out ${r.pname}? This will mark the reservation as completed.`)) return;
+    await updateDoc(doc(db, 'reservations', r.id), {
+      status: 'checked-out',
+      checkedOutAt: new Date(),
+    });
     fetchReservations();
   };
 
@@ -162,10 +183,10 @@ const AdminRecentReservations = () => {
         guest: billDetails.guest, room_name: billDetails.roomName,
         room_number: billDetails.roomNumber, check_in: billDetails.checkIn,
         check_out: billDetails.checkOut, nights: billDetails.nights,
-        rate: `$${billDetails.roomPrice.toFixed(2)}`,
+        rate:     `$${billDetails.roomPrice.toFixed(2)}`,
         subtotal: `$${billDetails.baseAmount.toFixed(2)}`,
-        hst: `$${billDetails.hstAmount.toFixed(2)}`,
-        total: `$${billDetails.totalAmount.toFixed(2)}`,
+        hst:      `$${billDetails.hstAmount.toFixed(2)}`,
+        total:    `$${billDetails.totalAmount.toFixed(2)}`,
         to_email: billDetails.email,
       }, '8nzBG6xAhz4eIyVij');
       alert('Receipt sent!');
@@ -179,10 +200,18 @@ const AdminRecentReservations = () => {
     return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  // ── Pipeline: tab → filter → sort → paginate ─────────────────
-  const pending   = reservations.filter(r => r.status !== 'booked');
-  const confirmed = reservations.filter(r => r.status === 'booked');
-  const tabList   = activeTab === 'pending' ? pending : confirmed;
+  // ── Derived pipeline ─────────────────────────────────────────
+  // Apply Option B: tag each reservation with its effective status
+  const tagged = reservations.map(r => ({ ...r, _effectiveStatus: getEffectiveStatus(r) }));
+
+  const pending    = tagged.filter(r => r._effectiveStatus === 'pending');
+  const confirmed  = tagged.filter(r => r._effectiveStatus === 'booked');       // in-house today / future
+  const checkedOut = tagged.filter(r => r._effectiveStatus === 'checked-out');  // past or manually checked out
+
+  const tabList =
+    activeTab === 'pending'     ? pending    :
+    activeTab === 'confirmed'   ? confirmed  :
+    checkedOut;
 
   const roomNames = [...new Set(reservations.map(r => r.roomName).filter(Boolean))].sort();
 
@@ -215,40 +244,40 @@ const AdminRecentReservations = () => {
   const hasFilters = search || filterRoom || filterFrom || filterTo;
   const clearFilters = () => { setSearch(''); setFilterRoom(''); setFilterFrom(''); setFilterTo(''); };
 
-  // ── Reusable sortable <th> ────────────────────────────────────
+  // ── Tab config ────────────────────────────────────────────────
+  const TABS = [
+    { id: 'pending',    label: `⏳ Pending`,     count: pending.length,    activeColor: 'var(--gold)',   activeBg: 'rgba(240,192,96,0.15)'  },
+    { id: 'confirmed',  label: `✅ Confirmed`,   count: confirmed.length,  activeColor: 'var(--green)',  activeBg: 'rgba(80,216,144,0.12)'  },
+    { id: 'checkedout', label: `🏁 Checked Out`, count: checkedOut.length, activeColor: 'var(--teal)',   activeBg: 'rgba(64,224,200,0.12)'  },
+  ];
+
+  // ── Sortable <th> ─────────────────────────────────────────────
   const SortTh = ({ col, label }) => (
     <th
       onClick={() => handleSort(col)}
       style={{
-        padding: '10px 14px',
-        textAlign: 'left',
-        fontSize: 10,
-        fontWeight: 700,
-        letterSpacing: '1.5px',
-        textTransform: 'uppercase',
+        padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700,
+        letterSpacing: '1.5px', textTransform: 'uppercase', whiteSpace: 'nowrap',
+        cursor: 'pointer', userSelect: 'none', transition: 'color 0.15s',
         color: sortCol === col ? 'var(--gold)' : 'var(--text-3)',
-        whiteSpace: 'nowrap',
-        cursor: 'pointer',
-        userSelect: 'none',
-        transition: 'color 0.15s',
       }}
       onMouseEnter={e => { if (sortCol !== col) e.currentTarget.style.color = 'var(--text-2)'; }}
       onMouseLeave={e => { if (sortCol !== col) e.currentTarget.style.color = 'var(--text-3)'; }}
     >
+      {label}<SortArrow col={col} sortCol={sortCol} sortDir={sortDir} />
+    </th>
+  );
+
+  const staticTh = (label) => (
+    <th key={label} style={{ padding: '10px 14px', fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
       {label}
-      <SortArrow col={col} sortCol={sortCol} sortDir={sortDir} />
     </th>
   );
 
   const filterInputSt = {
-    background: 'var(--ink-3)',
-    border: '1px solid var(--border-2)',
-    borderRadius: 8,
-    padding: '7px 11px',
-    fontSize: 12,
-    fontFamily: 'var(--font-disp)',
-    color: 'var(--text)',
-    outline: 'none',
+    background: 'var(--ink-3)', border: '1px solid var(--border-2)',
+    borderRadius: 8, padding: '7px 11px', fontSize: 12,
+    fontFamily: 'var(--font-disp)', color: 'var(--text)', outline: 'none',
   };
 
   return (
@@ -258,25 +287,21 @@ const AdminRecentReservations = () => {
         {/* ── Tabs + Add Button ── */}
         <div className="adm-panel-head">
           <div style={{ display: 'flex', gap: 4 }}>
-            {['pending','confirmed'].map(tab => (
+            {TABS.map(tab => (
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
                 style={{
                   border: 'none', cursor: 'pointer',
                   padding: '6px 16px', borderRadius: 6,
                   fontFamily: 'var(--font-disp)', fontSize: 12, fontWeight: 700,
                   letterSpacing: 1, textTransform: 'uppercase',
-                  background: activeTab === tab
-                    ? (tab === 'pending' ? 'rgba(240,192,96,0.15)' : 'rgba(80,216,144,0.12)')
-                    : 'transparent',
-                  color: activeTab === tab
-                    ? (tab === 'pending' ? 'var(--gold)' : 'var(--green)')
-                    : 'var(--text-3)',
+                  background: activeTab === tab.id ? tab.activeBg : 'transparent',
+                  color:      activeTab === tab.id ? tab.activeColor : 'var(--text-3)',
                   transition: 'all 0.15s',
                 }}
               >
-                {tab === 'pending' ? `⏳ Pending (${pending.length})` : `✅ Confirmed (${confirmed.length})`}
+                {tab.label} ({tab.count})
               </button>
             ))}
           </div>
@@ -284,6 +309,19 @@ const AdminRecentReservations = () => {
             <button className="adm-btn adm-btn-primary adm-btn" onClick={openAdd}>+ Add Booking</button>
           )}
         </div>
+
+        {/* ── Option B notice bar (only on confirmed tab) ── */}
+        {activeTab === 'confirmed' && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: 'rgba(64,224,200,0.06)', border: '1px solid rgba(64,224,200,0.15)',
+            borderRadius: 8, padding: '8px 14px', marginBottom: 14,
+            fontSize: 11, color: 'var(--teal)', fontFamily: 'var(--font-mono)',
+          }}>
+            <span>ℹ</span>
+            <span>Showing active bookings only — guests whose check-out date has passed are automatically moved to <strong>Checked Out</strong>.</span>
+          </div>
+        )}
 
         {/* ── Filter Bar ── */}
         <div style={{
@@ -297,8 +335,7 @@ const AdminRecentReservations = () => {
             <input
               style={{ ...filterInputSt, paddingLeft: 28, width: '100%', boxSizing: 'border-box' }}
               placeholder="Search guest or email…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
+              value={search} onChange={e => setSearch(e.target.value)}
             />
           </div>
 
@@ -334,69 +371,123 @@ const AdminRecentReservations = () => {
             <div className="adm-loading"><div className="adm-spinner" /><span>Loading reservations…</span></div>
           ) : shown.length === 0 ? (
             <div className="adm-empty">
-              <div className="adm-empty-icon">{hasFilters ? '🔍' : activeTab === 'pending' ? '🎉' : '📋'}</div>
+              <div className="adm-empty-icon">
+                {hasFilters ? '🔍' : activeTab === 'pending' ? '🎉' : activeTab === 'confirmed' ? '📋' : '🏁'}
+              </div>
               <div className="adm-empty-text">
-                {hasFilters ? 'No reservations match your filters.' : activeTab === 'pending' ? 'No pending requests!' : 'No confirmed reservations yet'}
+                {hasFilters
+                  ? 'No reservations match your filters.'
+                  : activeTab === 'pending'
+                  ? 'No pending requests!'
+                  : activeTab === 'confirmed'
+                  ? 'No active stays right now.'
+                  : 'No checked-out guests yet.'}
               </div>
             </div>
           ) : (
             <table className="adm-table">
               <thead>
                 <tr>
-                  {/* ↓ Sortable columns */}
                   <SortTh col="guest"    label="Guest"     />
                   <SortTh col="room"     label="Room"      />
                   <SortTh col="roomNo"   label="Room No."  />
                   <SortTh col="checkIn"  label="Check-in"  />
                   <SortTh col="checkOut" label="Check-out" />
-                  {/* Non-sortable */}
-                  <th style={{ padding: '10px 14px', fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>Guests</th>
-                  <th style={{ padding: '10px 14px', fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>Status</th>
-                  <th style={{ padding: '10px 14px', fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>Actions</th>
+                  {staticTh('Guests')}
+                  {staticTh('Status')}
+                  {staticTh('Actions')}
                 </tr>
               </thead>
               <tbody>
-                {shown.map((r, i) => (
-                  <tr key={r.id}>
-                    <td>
-                      <div className="adm-guest-cell">
-                        <div className="adm-avatar" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] + '22', color: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
-                          {r.pname?.charAt(0) || '?'}
+                {shown.map((r, i) => {
+                  const effStatus = r._effectiveStatus;
+                  const isCheckedOut = effStatus === 'checked-out';
+                  const isAutoCheckedOut = isCheckedOut && r.status !== 'checked-out'; // derived, not in Firestore yet
+
+                  return (
+                    <tr key={r.id} style={{ opacity: isCheckedOut ? 0.75 : 1 }}>
+                      <td>
+                        <div className="adm-guest-cell">
+                          <div className="adm-avatar" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] + '22', color: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
+                            {r.pname?.charAt(0) || '?'}
+                          </div>
+                          <div>
+                            <div className="adm-guest-name">{r.pname}</div>
+                            <div className="adm-guest-email">{r.email}</div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="adm-guest-name">{r.pname}</div>
-                          <div className="adm-guest-email">{r.email}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td style={{ color: 'var(--text)' }}>{r.roomName}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--teal)' }}>{r.roomNumber || '—'}</td>
-                    <td>{fmtDate(r.checkIn)}</td>
-                    <td>{fmtDate(r.checkOut)}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)' }}>{r.adults}A {r.kids > 0 ? `${r.kids}K` : ''}</td>
-                    <td>
-                      <span className={`adm-badge ${r.status === 'booked' ? 'booked' : 'pending'}`}>
-                        {r.status === 'booked' ? 'Booked' : 'Pending'}
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {r.status !== 'booked' ? (
-                          <>
-                            <button className="adm-btn adm-btn-confirm" onClick={() => handleConfirm(r.id)}>Confirm</button>
-                            <button className="adm-btn adm-btn-reject"  onClick={() => handleDelete(r.id)}>Reject</button>
-                          </>
+                      </td>
+                      <td style={{ color: 'var(--text)' }}>{r.roomName}</td>
+                      <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--teal)' }}>{r.roomNumber || '—'}</td>
+                      <td>{fmtDate(r.checkIn)}</td>
+                      <td>{fmtDate(r.checkOut)}</td>
+                      <td style={{ fontFamily: 'var(--font-mono)' }}>{r.adults}A {r.kids > 0 ? `${r.kids}K` : ''}</td>
+
+                      {/* ── Status badge ── */}
+                      <td>
+                        {effStatus === 'checked-out' ? (
+                          <div>
+                            <span className="adm-badge" style={{ background: 'rgba(64,224,200,0.12)', color: 'var(--teal)' }}>
+                              🏁 Checked Out
+                            </span>
+                            {/* Small "auto" label if derived from date, not yet saved to Firestore */}
+                            {isAutoCheckedOut && (
+                              <div style={{ fontSize: 9, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginTop: 3 }}>
+                                auto-detected
+                              </div>
+                            )}
+                          </div>
+                        ) : effStatus === 'booked' ? (
+                          <span className="adm-badge booked">✅ In-house</span>
                         ) : (
-                          <>
-                            <button className="adm-btn adm-btn-edit"   onClick={() => openEdit(r)}>Edit</button>
-                            <button className="adm-btn adm-btn-bill"   onClick={() => generateBill(r)}>Receipt</button>
-                            <button className="adm-btn adm-btn-reject" onClick={() => handleDelete(r.id)}>Remove</button>
-                          </>
+                          <span className="adm-badge pending">⏳ Pending</span>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+
+                      {/* ── Actions ── */}
+                      <td>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {effStatus === 'pending' && (
+                            <>
+                              <button className="adm-btn adm-btn-confirm" onClick={() => handleConfirm(r.id)}>Confirm</button>
+                              <button className="adm-btn adm-btn-reject"  onClick={() => handleDelete(r.id)}>Reject</button>
+                            </>
+                          )}
+
+                          {effStatus === 'booked' && (
+                            <>
+                              {/* Option A: Check Out button — only shown when checkOut date is today or past */}
+                              {(() => {
+                                const today    = new Date(); today.setHours(0,0,0,0);
+                                const checkOut = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut || 0);
+                                checkOut.setHours(0,0,0,0);
+                                return checkOut <= today ? (
+                                  <button
+                                    className="adm-btn"
+                                    style={{ background: 'rgba(64,224,200,0.15)', color: 'var(--teal)', fontWeight: 700 }}
+                                    onClick={() => handleCheckOut(r)}
+                                  >
+                                    🏁 Check Out
+                                  </button>
+                                ) : null;
+                              })()}
+                              <button className="adm-btn adm-btn-edit"   onClick={() => openEdit(r)}>Edit</button>
+                              <button className="adm-btn adm-btn-bill"   onClick={() => generateBill(r)}>Receipt</button>
+                              <button className="adm-btn adm-btn-reject" onClick={() => handleDelete(r.id)}>Remove</button>
+                            </>
+                          )}
+
+                          {effStatus === 'checked-out' && (
+                            <>
+                              <button className="adm-btn adm-btn-bill"   onClick={() => generateBill(r)}>Receipt</button>
+                              <button className="adm-btn adm-btn-reject" onClick={() => handleDelete(r.id)}>Remove</button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -406,23 +497,18 @@ const AdminRecentReservations = () => {
         {!loading && sorted.length > PAGE_SIZE && (
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '14px 4px 2px',
-            borderTop: '1px solid var(--border)',
-            marginTop: 12,
+            padding: '14px 4px 2px', borderTop: '1px solid var(--border)', marginTop: 12,
           }}>
             <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
               Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, sorted.length)} of {sorted.length}
             </span>
-
             <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} style={pageBtnStyle(page === 1)}>← Prev</button>
-
               {Array.from({ length: totalPages }, (_, i) => i + 1)
                 .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
                 .reduce((acc, p, idx, arr) => {
                   if (idx > 0 && p - arr[idx - 1] > 1) acc.push('…');
-                  acc.push(p);
-                  return acc;
+                  acc.push(p); return acc;
                 }, [])
                 .map((p, idx) =>
                   p === '…'
@@ -430,7 +516,6 @@ const AdminRecentReservations = () => {
                     : <button key={p} onClick={() => setPage(p)} style={pageNumStyle(p === page)}>{p}</button>
                 )
               }
-
               <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} style={pageBtnStyle(page === totalPages)}>Next →</button>
             </div>
           </div>
@@ -564,7 +649,7 @@ const AdminRecentReservations = () => {
   );
 };
 
-// ── Pagination button styles ──────────────────────────────────────
+// ── Pagination styles ─────────────────────────────────────────────
 const pageBtnStyle = (disabled) => ({
   background: 'var(--ink-3)', border: '1px solid var(--border-2)',
   color: disabled ? 'var(--text-3)' : 'var(--text-2)',
