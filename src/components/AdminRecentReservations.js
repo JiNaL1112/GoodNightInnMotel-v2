@@ -8,6 +8,12 @@ import { RoomContext } from '../context/RoomContext';
 import emailjs from '@emailjs/browser';
 
 const AVATAR_COLORS = ['#f0c060','#40e0c8','#f06090','#9080f0','#50d890','#60b0f0'];
+const ROOM_SLOTS = {
+  'Queen Bed':      [101, 102, 103, 104, 105],
+  'Two Queen Beds': [201, 202, 203, 204, 205],
+  'King Bed':       [301, 302, 303, 304, 305],
+  'Kitchenette':    [401, 402, 403, 404, 405],
+};
 const PAGE_SIZE = 8;
 
 // ── Sort value extractors ─────────────────────────────────────────
@@ -572,19 +578,26 @@ const AdminRecentReservations = () => {
                 </div>
                 <div className="adm-field-row">
                   <div className="adm-field">
-                    <label className="adm-field-label">Room</label>
-                    <select className="adm-input" value={selectedRoomId} onChange={e => {
-                      const sel = rooms.find(r => r.id === e.target.value);
-                      setSelectedRoomId(sel?.id || ''); setSelectedRoomName(sel?.name || '');
-                    }} required>
-                      <option value="">Select Room</option>
-                      {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="adm-field">
-                    <label className="adm-field-label">Room Number</label>
-                    <input className="adm-input" value={roomNumber} onChange={e => setRoomNumber(e.target.value)} required placeholder="e.g. 101" />
-                  </div>
+  <label className="adm-field-label">Room</label>
+  <select className="adm-input" value={selectedRoomId} onChange={e => {
+    const sel = rooms.find(r => r.id === e.target.value);
+    setSelectedRoomId(sel?.id || '');
+    setSelectedRoomName(sel?.name || '');
+    setRoomNumber(''); // reset when room type changes
+  }} required>
+    <option value="">Select Room</option>
+    {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+  </select>
+</div>
+<div className="adm-field">
+  <label className="adm-field-label">Room Number</label>
+  <select className="adm-input" value={roomNumber} onChange={e => setRoomNumber(e.target.value)} required disabled={!selectedRoomName}>
+    <option value="">{selectedRoomName ? 'Select Number' : '— pick room first —'}</option>
+    {(ROOM_SLOTS[selectedRoomName] || []).map(n => (
+      <option key={n} value={n}>{n}</option>
+    ))}
+  </select>
+</div>
                 </div>
               </div>
               <div className="adm-modal-foot">
