@@ -2,14 +2,30 @@ import React, { useEffect, useState } from 'react';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
-// Must match AdminRoomStatus — 4 types × 5 slots = 20 rooms
 const TOTAL_ROOMS = 20;
+
+// ── Single source of truth — identical to AdminRecentReservations ─────────────
+const getEffectiveStatus = (r) => {
+  if (r.status === 'checked-out') return 'checked-out';
+
+  if (r.status === 'booked') {
+    const today    = new Date(); today.setHours(0, 0, 0, 0);
+    const checkOut = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut || 0);
+    const coDay    = new Date(checkOut); coDay.setHours(0, 0, 0, 0);
+
+    if (coDay < today) return 'checked-out';   // past checkout → auto checked-out
+    if (r.checkedInAt) return 'in-house';       // admin clicked Check In → occupied
+    return 'upcoming';                           // confirmed but not yet checked in
+  }
+
+  return 'pending';
+};
 
 const AdminStats = () => {
   const [stats, setStats] = useState({
     totalReservations:   0,
     pendingReservations: 0,
-    occupiedRooms:       0,   // individual slots occupied right now
+    occupiedRooms:       0,
     revenueThisMonth:    0,
     revenueLastMonth:    0,
     bookingsThisMonth:   0,
@@ -34,8 +50,7 @@ const AdminStats = () => {
 
         let revenueThis = 0, revenueLast = 0;
 
-        const confirmed = reservations.filter(r => r.status === 'booked');
-        const pending   = reservations.filter(r => r.status === 'pending' || !r.status);
+        const pending = reservations.filter(r => r.status === 'pending' || !r.status);
 
         reservations.forEach(r => {
           if (r.status !== 'booked') return;
@@ -52,16 +67,12 @@ const AdminStats = () => {
           if (created >= lastMonthStart && created <= lastMonthEnd) revenueLast += total;
         });
 
-        // ── Count occupied SLOTS (roomId + roomNumber) not just room types ───
-        // This mirrors the exact logic in AdminRoomStatus.getSlotStatus()
-        const today           = new Date();
+        // ── FIX: Count occupied slots using same getEffectiveStatus as In-house tab ──
+        // A slot is occupied ONLY when the admin has clicked Check In (checkedInAt exists)
+        // and the guest has not been checked out yet.
         const occupiedSlotKeys = new Set();
-
-        confirmed.forEach(r => {
-          const ci = r.checkIn?.toDate  ? r.checkIn.toDate()  : new Date(r.checkIn);
-          const co = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut);
-          if (ci <= today && co >= today) {
-            // Key = roomId::roomNumber — unique per physical room slot
+        reservations.forEach(r => {
+          if (getEffectiveStatus(r) === 'in-house') {
             const key = `${r.roomId}::${r.roomNumber}`;
             occupiedSlotKeys.add(key);
           }
@@ -69,7 +80,6 @@ const AdminStats = () => {
 
         const occupiedRooms = occupiedSlotKeys.size;
 
-        // ── Bookings created this calendar month (any status) ─────────────────
         const bookingsThisMonth = reservations.filter(r => {
           const created = r.createdAt?.toDate ? r.createdAt.toDate() : new Date(r.createdAt);
           return created >= thisMonthStart;
@@ -100,7 +110,6 @@ const AdminStats = () => {
   const vacantRooms = TOTAL_ROOMS - stats.occupiedRooms;
 
   const cards = [
-    // Card 1 — Revenue This Month
     {
       color: 'gold',
       icon:  '💰',
@@ -109,8 +118,6 @@ const AdminStats = () => {
       delta: revDelta ? `${Number(revDelta) > 0 ? '+' : ''}${revDelta}% vs last month` : 'First month',
       neg:   Number(revDelta) < 0,
     },
-
-    // Card 2 — Occupied Rooms (X / 20)
     {
       color: 'teal',
       icon:  '🛏️',
@@ -119,8 +126,6 @@ const AdminStats = () => {
       delta: `${vacantRooms} of ${TOTAL_ROOMS} rooms vacant`,
       neg:   false,
     },
-
-    // Card 3 — Pending Approvals
     {
       color: 'rose',
       icon:  '⏳',
@@ -129,8 +134,6 @@ const AdminStats = () => {
       delta: stats.pendingReservations > 0 ? 'Action required' : 'All cleared ✓',
       neg:   stats.pendingReservations > 0,
     },
-
-    // Card 4 — This Month's Bookings
     {
       color: 'violet',
       icon:  '📅',
