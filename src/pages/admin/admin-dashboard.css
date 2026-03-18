@@ -4,46 +4,47 @@
    ADMIN DESIGN TOKENS
    Scoped to .adm-shell — won't bleed into user pages
 ───────────────────────────────────────── */
+/* REPLACE THIS ENTIRE BLOCK */
 .adm-shell {
-  /* Dark palette (dashboard panels) */
-  --ink:        #0a0a0f;
-  --ink-2:      #12121a;
-  --ink-3:      #1a1a28;
-  --ink-4:      #242438;
-  --border:     rgba(255,255,255,0.07);
-  --border-2:   rgba(255,255,255,0.12);
-  --text:       #e8e8f0;
-  --text-2:     #9898b8;
-  --text-3:     #5a5a7a;
+  /* ── Light palette (matches front-end) ── */
+  --ink:        #ffffff;
+  --ink-2:      #f8f7f4;
+  --ink-3:      #f1f0ed;
+  --ink-4:      #e9e8e5;
+  --border:     #e5e7eb;
+  --border-2:   #d1d5db;
+  --text:       #1a1a1a;
+  --text-2:     #374151;
+  --text-3:     #6b7280;
 
-  /* Accent palette — same gold/teal/rose/violet as before */
-  --gold:       #f0c060;
-  --gold-dim:   rgba(240,192,96,0.12);
-  --gold-glow:  rgba(240,192,96,0.25);
-  --teal:       #40e0c8;
-  --teal-dim:   rgba(64,224,200,0.10);
-  --rose:       #f06090;
-  --rose-dim:   rgba(240,96,144,0.10);
-  --violet:     #9080f0;
-  --violet-dim: rgba(144,128,240,0.10);
-  --green:      #50d890;
-  --green-dim:  rgba(80,216,144,0.10);
+  /* ── Accent: use blue (matches front-end btn-primary) ── */
+  --gold:       #2563eb;
+  --gold-dim:   #eff6ff;
+  --gold-glow:  #bfdbfe;
 
-  /* Typography */
+  /* ── Keep functional accents readable on light bg ── */
+  --teal:       #0891b2;
+  --teal-dim:   #ecfeff;
+  --rose:       #dc2626;
+  --rose-dim:   #fef2f2;
+  --violet:     #7c3aed;
+  --violet-dim: #f5f3ff;
+  --green:      #16a34a;
+  --green-dim:  #dcfce7;
+
+  /* ── Typography (same as front-end) ── */
   --font-disp:  'DM Sans', sans-serif;
   --font-serif: 'Playfair Display', serif;
   --font-mono:  'JetBrains Mono', monospace;
 
-  /* Shape */
-  --radius:     12px;
-  --radius-lg:  18px;
+  /* ── Shape ── */
+  --radius:     10px;
+  --radius-lg:  14px;
 
-  /* Shell */
   min-height: 100vh;
   background: var(--ink);
   font-family: var(--font-disp);
   color: var(--text);
-  /* No padding-top — we hide the global Header on admin pages via AdminDashboard */
 }
 
 /* ─────────────────────────────────────────
@@ -367,8 +368,125 @@
   white-space: nowrap;
 }
 .adm-table tr:last-child td { border-bottom: none; }
-.adm-table tr:hover td      { background: rgba(255,255,255,0.02); }
 
+
+/* Table hover — was white overlay, now gray */
+.adm-table tr:hover td { background: #f8f7f4; }
+
+/* Stat card background — was dark, now white with shadow */
+.adm-stat-card {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 22px 20px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.adm-stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.10);
+  border-color: var(--border-2);
+}
+
+/* Panel card — was dark ink-2, now white */
+.adm-panel {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+}
+
+/* Sidebar + topbar */
+.adm-topbar {
+  background: #ffffff;
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.adm-sidebar {
+  background: #ffffff;
+  border-right: 1px solid var(--border);
+}
+
+/* Nav active item — blue instead of gold */
+.adm-nav-item.active {
+  background: var(--gold-dim);
+  color: var(--gold);
+}
+
+/* Today panel items */
+.adm-today-item {
+  background: #f8f7f4;
+  border-left: 3px solid transparent;
+}
+
+/* Quick action buttons */
+.adm-quick-btn {
+  background: #f8f7f4;
+  border: 1px solid var(--border);
+  color: var(--text-2);
+}
+.adm-quick-btn:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: var(--gold-dim);
+}
+
+/* Stat colors — replace gold/teal/rose/violet with readable light-bg versions */
+.adm-stat-card.gold .adm-stat-val { color: #2563eb; }
+.adm-stat-card.teal .adm-stat-val { color: #0891b2; }
+.adm-stat-card.rose .adm-stat-val { color: #dc2626; }
+.adm-stat-card.violet .adm-stat-val { color: #7c3aed; }
+.adm-stat-delta                    { color: #16a34a; }
+.adm-stat-delta.neg                { color: #dc2626; }
+
+/* Primary button — now blue like front-end */
+.adm-btn-primary {
+  background: #2563eb;
+  color: #ffffff;
+  padding: 9px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.adm-btn-primary:hover { background: #1d4ed8; }
+
+/* Ghost button */
+.adm-btn-ghost {
+  background: #f8f7f4;
+  border: 1px solid var(--border-2);
+  color: var(--text-2);
+  padding: 9px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.adm-btn-ghost:hover { border-color: #2563eb; color: #2563eb; }
+
+/* Live dot — keep green */
+.adm-live-dot {
+  background: #16a34a;
+  box-shadow: 0 0 6px rgba(22,163,74,0.4);
+}
+
+/* Topbar title color — blue instead of gold */
+.adm-topbar-title { color: #2563eb; }
+.adm-topbar-title-icon {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+
+/* Badge colors */
+.adm-badge.booked  { background: #dcfce7; color: #16a34a; }
+.adm-badge.pending { background: #fef9c3; color: #a16207; }
+
+/* Revenue bars — blue instead of gold */
+.adm-rev-bar {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+.adm-rev-bar:hover   { background: #dbeafe; }
+.adm-rev-bar.current { background: #bfdbfe; border-color: #2563eb; }
 /* ─────────────────────────────────────────
    BADGES
 ───────────────────────────────────────── */

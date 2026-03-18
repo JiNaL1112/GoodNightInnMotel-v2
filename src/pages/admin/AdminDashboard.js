@@ -21,9 +21,9 @@ const NAV = [
 
 const AdminDashboard = () => {
   const [activeNav, setActiveNav] = useState('overview');
-  const [now, setNow]             = useState(new Date());   // ← live clock fix
+  const [now, setNow]             = useState(new Date());
   const { user, logout }          = useContext(AuthContext);
-  const navigate                  = useNavigate();           // ← single navigate instance
+  const navigate                  = useNavigate();
 
   // Live clock — updates every minute
   useEffect(() => {
@@ -56,6 +56,7 @@ const AdminDashboard = () => {
           <span className="adm-topbar-title-icon">🌙</span>
           GoodNight Inn · Admin
         </span>
+
         <div className="adm-topbar-meta">
           <div className="adm-live-dot" />
           <span>Live</span>
@@ -72,20 +73,29 @@ const AdminDashboard = () => {
           {user && (
             <>
               <span>·</span>
-              <span style={{ color: 'var(--gold)' }}>
+              <span style={{ color: '#2563eb', fontWeight: 600 }}>
                 {user.displayName?.split(' ')[0] || 'Admin'}
               </span>
               <button
                 onClick={logout}
                 style={{
-                  background: 'var(--ink-3)',
-                  border: '1px solid var(--border-2)',
-                  color: 'var(--text-2)',
+                  background:   '#f1f0ed',
+                  border:       '1px solid #d1d5db',
+                  color:        '#374151',
                   borderRadius: 6,
-                  padding: '3px 10px',
-                  fontSize: 11,
-                  cursor: 'pointer',
-                  fontFamily: 'var(--font-disp)',
+                  padding:      '3px 10px',
+                  fontSize:     11,
+                  cursor:       'pointer',
+                  fontFamily:   'var(--font-disp)',
+                  transition:   'border-color 0.2s, color 0.2s',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = '#2563eb';
+                  e.currentTarget.style.color       = '#2563eb';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = '#d1d5db';
+                  e.currentTarget.style.color       = '#374151';
                 }}
               >
                 Logout
@@ -95,12 +105,13 @@ const AdminDashboard = () => {
         </div>
       </div>
 
+      {/* ── Body: Sidebar + Main ── */}
       <div className="adm-body">
 
         {/* ── Sidebar ── */}
         <aside className="adm-sidebar">
 
-          {/* In-page navigation (tab switching — no route change needed) */}
+          {/* In-page navigation (tab switching) */}
           <div className="adm-nav-section">
             <div className="adm-nav-label">Navigation</div>
             {NAV.map(n => (
@@ -117,7 +128,7 @@ const AdminDashboard = () => {
 
           <div className="adm-nav-divider" />
 
-          {/* Management — navigate to separate routes using useNavigate (no full reload) */}
+          {/* Management — navigate to separate routes */}
           <div className="adm-nav-section">
             <div className="adm-nav-label">Management</div>
             <button
@@ -142,7 +153,7 @@ const AdminDashboard = () => {
 
           <div className="adm-nav-divider" />
 
-          {/* External links — window.open / tel: are fine here */}
+          {/* External links */}
           <div className="adm-nav-section">
             <div className="adm-nav-label">External</div>
             <button
@@ -164,9 +175,6 @@ const AdminDashboard = () => {
 
         {/* ── Main Content ── */}
         <main className="adm-content">
-
-          {/* OVERVIEW */}
-          
 
           {/* OVERVIEW */}
           {activeNav === 'overview' && (
