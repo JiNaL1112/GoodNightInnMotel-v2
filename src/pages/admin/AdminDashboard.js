@@ -4,7 +4,6 @@ import ScrollToTop from '../../components/ScrollToTop';
 
 import AdminStats              from '../../components/AdminStats';
 import AdminRoomStatus         from '../../components/AdminRoomStatus';
-import AdminRevenue            from '../../components/AdminRevenue';
 import AdminTodayPanel         from '../../components/AdminTodayPanel';
 import AdminRecentReservations from '../../components/AdminRecentReservations';
 import AdminQuickActions       from '../../components/AdminQuickActions';
@@ -16,7 +15,6 @@ const NAV = [
   { id: 'overview',     icon: '◈',  label: 'Overview'     },
   { id: 'reservations', icon: '📋', label: 'Reservations' },
   { id: 'rooms',        icon: '🏨', label: 'Rooms'        },
-  { id: 'revenue',      icon: '💰', label: 'Revenue'      },
 ];
 
 const AdminDashboard = () => {
@@ -180,12 +178,9 @@ const AdminDashboard = () => {
           {activeNav === 'overview' && (
             <>
               <AdminStats />
-              <div className="adm-panels-3">
-                <AdminRevenue />
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                  <AdminTodayPanel />
-                  <AdminQuickActions />
-                </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                <AdminTodayPanel />
+                <AdminQuickActions />
               </div>
               <AdminRoomStatus />
             </>
@@ -207,17 +202,7 @@ const AdminDashboard = () => {
             </>
           )}
 
-          {/* REVENUE */}
-          {activeNav === 'revenue' && (
-            <>
-              <AdminStats />
-              <AdminRevenue />
-              <div className="adm-panels" style={{ marginTop: 18 }}>
-                <AdminTodayPanel />
-                <AdminQuickActions />
-              </div>
-            </>
-          )}
+          
 
         </main>
       </div>
