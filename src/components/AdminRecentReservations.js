@@ -254,8 +254,68 @@ const AdminRecentReservations = () => {
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const shown      = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  
+
   const hasFilters = search || filterRoom || filterFrom || filterTo;
   const clearFilters = () => { setSearch(''); setFilterRoom(''); setFilterFrom(''); setFilterTo(''); };
+
+  
+// ── Excel export (Checked Out tab) ────────────────────────────────────────
+  const handleExportExcel = async () => {
+    if (sorted.length === 0) { alert('No checked-out records to export.'); return; }
+
+    // Fetch room prices from Firestore
+    const roomSnap = await getDocs(collection(db, 'rooms'));
+    const roomMap  = {};
+    roomSnap.docs.forEach(d => { roomMap[d.id] = d.data(); });
+
+    const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.2/package/xlsx.mjs');
+
+    const fmtD = (ts) => {
+      if (!ts) return '';
+      const d = ts?.toDate ? ts.toDate() : new Date(ts);
+      return d.toLocaleDateString('en-CA');
+    };
+
+    const rows = sorted.map(r => {
+      const room     = roomMap[r.roomId];
+      const price    = room?.price ?? 0;
+      const checkIn  = r.checkIn?.toDate  ? r.checkIn.toDate()  : new Date(r.checkIn  || 0);
+      const checkOut = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut || 0);
+      const nights   = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
+      const subtotal = price * nights;
+      const hst      = subtotal * 0.13;
+      const total    = subtotal + hst;
+
+      return {
+        'Guest Name':      r.pname        || '',
+        'Email':           r.email        || '',
+        'Phone':           r.phone        || '',
+        'Room Type':       r.roomName     || '',
+        'Room No.':        r.roomNumber   || '',
+        'Adults':          r.adults       ?? '',
+        'Kids':            r.kids         ?? '',
+        'Check-In':        fmtD(r.checkIn),
+        'Check-Out':       fmtD(r.checkOut),
+        'Checked-Out At':  fmtD(r.checkedOutAt),
+        'Nights':          nights,
+        'Rate/Night ($)':  price,
+        'Subtotal ($)':    parseFloat(subtotal.toFixed(2)),
+        'HST 13% ($)':     parseFloat(hst.toFixed(2)),
+        'Total Paid ($)':  parseFloat(total.toFixed(2)),
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [22, 28, 16, 18, 10, 8, 6, 14, 14, 18, 8, 14, 14, 12, 14].map(w => ({ wch: w }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Checked Out');
+    const dateTag = filterFrom && filterTo
+      ? `_${filterFrom}_to_${filterTo}`
+      : `_${new Date().toISOString().slice(0, 10)}`;
+    XLSX.writeFile(wb, `checkout_guests${dateTag}.xlsx`);
+  };
+  
 
   // ── Tab config — 4 tabs ────────────────────────────────────────────────────
   const TABS = [
@@ -400,6 +460,26 @@ const AdminRecentReservations = () => {
           </div>
           {hasFilters && (
             <button onClick={clearFilters} style={{ ...inp, cursor: 'pointer', color: '#f06090', border: '1px solid rgba(240,96,144,0.3)' }}>✕ Clear</button>
+          )}
+          {activeTab === 'checkedout' && (
+            <button
+              onClick={handleExportExcel}
+              title={sorted.length === 0 ? 'No data to export' : `Export ${sorted.length} record(s) to Excel`}
+              style={{
+                ...inp,
+                cursor:     'pointer',
+                color:      '#40e0c8',
+                border:     '1px solid rgba(64,224,200,0.35)',
+                background: 'rgba(64,224,200,0.08)',
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+                display:    'flex',
+                alignItems: 'center',
+                gap:        5,
+              }}
+            >
+              ⬇ Export Excel
+            </button>
           )}
         </div>
 
