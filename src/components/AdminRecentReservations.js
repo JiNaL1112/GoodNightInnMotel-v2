@@ -50,7 +50,6 @@ const SortArrow = ({ col, sortCol, sortDir }) => {
   );
 };
 
-// ── Reusable field components for the modal ───────────────────────────────────
 const FieldRow = ({ children }) => (
   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>{children}</div>
 );
@@ -78,8 +77,6 @@ const AdminRecentReservations = () => {
     adults, setAdults, kids, setKids,
     selectedRoomId, setSelectedRoomId,
     selectedRoomName, setSelectedRoomName,
-
-    // Extended fields
     address,         setAddress,
     city,            setCity,
     province,        setProvince,
@@ -128,37 +125,14 @@ const AdminRecentReservations = () => {
     finally { setLoading(false); }
   };
 
-  const handleSort = (col) => {
-    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortCol(col); setSortDir('asc'); }
-  };
-
-  const handleConfirm = async (id) => {
-    await updateDoc(doc(db, 'reservations', id), { status: 'booked' });
-    fetchReservations();
-  };
-
-  const handleCheckIn = async (r) => {
-    if (!window.confirm(`Check in ${r.pname}?`)) return;
-    await updateDoc(doc(db, 'reservations', r.id), { checkedInAt: new Date() });
-    fetchReservations();
-  };
-
-  const handleCheckOut = async (r) => {
-    if (!window.confirm(`Check out ${r.pname}?`)) return;
-    await updateDoc(doc(db, 'reservations', r.id), { status: 'checked-out', checkedOutAt: new Date() });
-    fetchReservations();
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm('Remove this reservation?')) return;
-    await deleteDoc(doc(db, 'reservations', id));
-    fetchReservations();
-  };
+  const handleSort    = (col) => { if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortCol(col); setSortDir('asc'); } };
+  const handleConfirm  = async (id) => { await updateDoc(doc(db, 'reservations', id), { status: 'booked' }); fetchReservations(); };
+  const handleCheckIn  = async (r)  => { if (!window.confirm(`Check in ${r.pname}?`)) return; await updateDoc(doc(db, 'reservations', r.id), { checkedInAt: new Date() }); fetchReservations(); };
+  const handleCheckOut = async (r)  => { if (!window.confirm(`Check out ${r.pname}?`)) return; await updateDoc(doc(db, 'reservations', r.id), { status: 'checked-out', checkedOutAt: new Date() }); fetchReservations(); };
+  const handleDelete   = async (id) => { if (!window.confirm('Remove this reservation?')) return; await deleteDoc(doc(db, 'reservations', id)); fetchReservations(); };
 
   const openAdd = () => {
     setIsEditing(false); setEditTarget(null); setRoomNumber('');
-    // Reset extended fields
     setAddress(''); setCity(''); setProvince(''); setCountry(''); setPostalCode('');
     setCompany(''); setDriverLicNo(''); setDob(''); setDeposit('');
     setReturnedDeposit(''); setMethodOfPayment(''); setPlateNumber('');
@@ -168,40 +142,30 @@ const AdminRecentReservations = () => {
 
   const openEdit = (res) => {
     setIsEditing(true); setEditTarget(res);
-    // Core
     setPName(res.pname); setEmail(res.email); setPhone(res.phone);
     setCheckInDate(res.checkIn?.toDate?.() || new Date());
     setCheckOutDate(res.checkOut?.toDate?.() || new Date());
     setAdults(res.adults); setKids(res.kids);
     setSelectedRoomId(res.roomId); setSelectedRoomName(res.roomName);
     setRoomNumber(res.roomNumber || '');
-    // Extended
-    setAddress(res.address || '');
-    setCity(res.city || '');
-    setProvince(res.province || '');
-    setCountry(res.country || '');
-    setPostalCode(res.postalCode || '');
-    setCompany(res.company || '');
-    setDriverLicNo(res.driverLicNo || '');
-    setDob(res.dob || '');
+    setAddress(res.address || '');         setCity(res.city || '');
+    setProvince(res.province || '');       setCountry(res.country || '');
+    setPostalCode(res.postalCode || '');   setCompany(res.company || '');
+    setDriverLicNo(res.driverLicNo || ''); setDob(res.dob || '');
     setDeposit(res.deposit != null ? String(res.deposit) : '');
     setReturnedDeposit(res.returnedDeposit != null ? String(res.returnedDeposit) : '');
-    setMethodOfPayment(res.methodOfPayment || '');
-    setPlateNumber(res.plateNumber || '');
-    setClerk(res.clerk || '');
-    setNumberOfRooms(res.numberOfRooms || 1);
+    setMethodOfPayment(res.methodOfPayment || ''); setPlateNumber(res.plateNumber || '');
+    setClerk(res.clerk || '');             setNumberOfRooms(res.numberOfRooms || 1);
     setShowModal(true);
   };
 
   const handleFormSubmit = async (e) => {
     e.preventDefault(); setSaving(true);
     const data = {
-      // Core
       pname, email, phone, checkIn: checkInDate, checkOut: checkOutDate,
       adults, kids, roomId: selectedRoomId, roomName: selectedRoomName,
       roomNumber, status: 'booked',
       [isEditing ? 'updatedAt' : 'createdAt']: new Date(),
-      // Extended
       address, city, province, country, postalCode,
       company, driverLicNo, dob,
       deposit:         deposit         ? Number(deposit)         : null,
@@ -223,12 +187,11 @@ const AdminRecentReservations = () => {
     if (!room) return;
     const checkIn  = res.checkIn?.toDate  ? res.checkIn.toDate()  : new Date(res.checkIn);
     const checkOut = res.checkOut?.toDate ? res.checkOut.toDate() : new Date(res.checkOut);
-    const nights    = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
+    const nights   = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
     const roomTotal = room.price * nights;
     const accomTax  = roomTotal * 0.04;
     const subTotal  = roomTotal + accomTax;
     const hst       = subTotal * 0.13;
-    const total     = subTotal + hst;
     setBillDetails({
       guest: res.pname, email: res.email, phone: res.phone,
       address: res.address, city: res.city, province: res.province,
@@ -237,9 +200,11 @@ const AdminRecentReservations = () => {
       plateNumber: res.plateNumber,
       roomName: room.name, roomNumber: res.roomNumber || 'N/A',
       numberOfRooms: res.numberOfRooms || 1,
-      checkIn: checkIn.toDateString(), checkOut: checkOut.toDateString(),
+      checkIn:   checkIn.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }),
+      checkOut:  checkOut.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }),
+      createdAt: new Date().toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }),
       nights, roomPrice: room.price, roomTotal, accomTax, subTotal,
-      hstAmount: hst, totalAmount: total,
+      hstAmount: hst, totalAmount: subTotal + hst,
       deposit: res.deposit, returnedDeposit: res.returnedDeposit,
       methodOfPayment: res.methodOfPayment,
       clerk: res.clerk, adults: res.adults, kids: res.kids,
@@ -247,27 +212,91 @@ const AdminRecentReservations = () => {
     setBillModal(true);
   };
 
+  // ── PDF GENERATION ───────────────────────────────────────────────────────────
   const handleDownloadPdf = async () => {
     const el = document.getElementById('receipt-printable');
     if (!el) return;
     setGeneratingPdf(true);
+
+    // Lift overflow clipping on every scroll ancestor so html2canvas sees full height
+    const scrollAncestors = [];
+    let node = el.parentElement;
+    while (node && node !== document.body) {
+      const cs = window.getComputedStyle(node);
+      if (['auto','hidden','scroll'].includes(cs.overflow) ||
+          ['auto','hidden','scroll'].includes(cs.overflowY) ||
+          node.style.maxHeight) {
+        scrollAncestors.push({
+          el: node,
+          overflow:  node.style.overflow,
+          overflowY: node.style.overflowY,
+          maxHeight: node.style.maxHeight,
+        });
+        node.style.overflow  = 'visible';
+        node.style.overflowY = 'visible';
+        node.style.maxHeight = 'none';
+      }
+      node = node.parentElement;
+    }
+
+    await new Promise(r => setTimeout(r, 200));
+
     try {
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false });
-      const imgData   = canvas.toDataURL('image/png');
-      const pdf       = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight= pdf.internal.pageSize.getHeight();
-      const imgWidth  = pageWidth - 20;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      const yOffset   = imgHeight < pageHeight ? (pageHeight - imgHeight) / 2 : 10;
-      pdf.addImage(imgData, 'PNG', 10, yOffset, imgWidth, imgHeight);
+      const canvas = await html2canvas(el, {
+        scale: 2.5,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        width:        el.scrollWidth,
+        height:       el.scrollHeight,
+        windowWidth:  el.scrollWidth,
+        windowHeight: el.scrollHeight,
+        x: 0, y: 0, scrollX: 0, scrollY: 0,
+      });
+
+      const imgData     = canvas.toDataURL('image/png');
+      const pdf         = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageW       = pdf.internal.pageSize.getWidth();
+      const pageH       = pdf.internal.pageSize.getHeight();
+      const margin      = 10;
+      const printW      = pageW - margin * 2;
+      const totalImgH   = (canvas.height * printW) / canvas.width;
+      const usablePageH = pageH - margin * 2;
+
+      if (totalImgH <= usablePageH) {
+        // Single page — vertically centred
+        const yOffset = (pageH - totalImgH) / 2;
+        pdf.addImage(imgData, 'PNG', margin, yOffset, printW, totalImgH);
+      } else {
+        // Multi-page slicing
+        const pxPerMm  = canvas.width / printW;
+        const sliceHpx = usablePageH * pxPerMm;
+        let yPx = 0, pageIdx = 0;
+        while (yPx < canvas.height) {
+          const thisSlice = Math.min(sliceHpx, canvas.height - yPx);
+          const sc = document.createElement('canvas');
+          sc.width = canvas.width; sc.height = Math.ceil(thisSlice);
+          const ctx = sc.getContext('2d');
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, sc.width, sc.height);
+          ctx.drawImage(canvas, 0, yPx, canvas.width, thisSlice, 0, 0, canvas.width, thisSlice);
+          if (pageIdx > 0) pdf.addPage();
+          pdf.addImage(sc.toDataURL('image/png'), 'PNG', margin, margin, printW, thisSlice / pxPerMm);
+          yPx += thisSlice; pageIdx++;
+        }
+      }
+
       const safeName = (billDetails.guest || 'guest').replace(/\s+/g, '_');
-      const dateStr  = new Date().toISOString().slice(0, 10);
-      pdf.save(`receipt_${safeName}_${dateStr}.pdf`);
+      pdf.save(`receipt_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch (err) {
       console.error('PDF generation failed:', err);
-      alert('PDF generation failed.');
-    } finally { setGeneratingPdf(false); }
+      alert('PDF generation failed. Please try again.');
+    } finally {
+      scrollAncestors.forEach(({ el: a, overflow, overflowY, maxHeight }) => {
+        a.style.overflow = overflow; a.style.overflowY = overflowY; a.style.maxHeight = maxHeight;
+      });
+      setGeneratingPdf(false);
+    }
   };
 
   const sendBill = async () => {
@@ -287,7 +316,7 @@ const AdminRecentReservations = () => {
         to_email: billDetails.email,
       }, '8nzBG6xAhz4eIyVij');
       alert('Receipt sent!');
-    } catch (err) { alert('Send failed'); }
+    } catch { alert('Send failed'); }
     finally { setSendingEmail(false); }
   };
 
@@ -297,16 +326,16 @@ const AdminRecentReservations = () => {
     return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  const tagged = reservations.map(r => ({ ...r, _eff: getEffectiveStatus(r) }));
+  const tagged         = reservations.map(r => ({ ...r, _eff: getEffectiveStatus(r) }));
   const pendingList    = tagged.filter(r => r._eff === 'pending');
   const upcomingList   = tagged.filter(r => r._eff === 'upcoming');
   const inHouseList    = tagged.filter(r => r._eff === 'in-house');
   const checkedOutList = tagged.filter(r => r._eff === 'checked-out');
 
   const tabList =
-    activeTab === 'pending'    ? pendingList    :
-    activeTab === 'upcoming'   ? upcomingList   :
-    activeTab === 'inhouse'    ? inHouseList    :
+    activeTab === 'pending'  ? pendingList  :
+    activeTab === 'upcoming' ? upcomingList :
+    activeTab === 'inhouse'  ? inHouseList  :
     checkedOutList;
 
   const roomNames = [...new Set(reservations.map(r => r.roomName).filter(Boolean))].sort();
@@ -315,29 +344,22 @@ const AdminRecentReservations = () => {
     const q = search.toLowerCase();
     if (q && !r.pname?.toLowerCase().includes(q) && !r.email?.toLowerCase().includes(q)) return false;
     if (filterRoom && r.roomName !== filterRoom) return false;
-    if (filterFrom) {
-      const ci = r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn);
-      if (ci < new Date(filterFrom)) return false;
-    }
-    if (filterTo) {
-      const co = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut);
-      if (co > new Date(filterTo + 'T23:59:59')) return false;
-    }
+    if (filterFrom) { const ci = r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn); if (ci < new Date(filterFrom)) return false; }
+    if (filterTo)   { const co = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut); if (co > new Date(filterTo + 'T23:59:59')) return false; }
     return true;
   });
 
   const sorted = [...filtered].sort((a, b) => {
-    const getter = SORT_COLS[sortCol];
-    if (!getter) return 0;
+    const getter = SORT_COLS[sortCol]; if (!getter) return 0;
     const av = getter(a), bv = getter(b);
     if (av < bv) return sortDir === 'asc' ? -1 : 1;
     if (av > bv) return sortDir === 'asc' ?  1 : -1;
     return 0;
   });
 
-  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  const shown      = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const hasFilters = search || filterRoom || filterFrom || filterTo;
+  const totalPages   = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const shown        = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const hasFilters   = search || filterRoom || filterFrom || filterTo;
   const clearFilters = () => { setSearch(''); setFilterRoom(''); setFilterFrom(''); setFilterTo(''); };
 
   const handleExportExcel = async () => {
@@ -348,16 +370,12 @@ const AdminRecentReservations = () => {
     const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.2/package/xlsx.mjs');
     const fmtD = (ts) => { if (!ts) return ''; const d = ts?.toDate ? ts.toDate() : new Date(ts); return d.toLocaleDateString('en-CA'); };
     const rows = sorted.map(r => {
-      const room = roomMap[r.roomId];
-      const price = room?.price ?? 0;
-      const checkIn  = r.checkIn?.toDate  ? r.checkIn.toDate()  : new Date(r.checkIn  || 0);
-      const checkOut = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut || 0);
-      const nights = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
-      const roomTotal = price * nights;
-      const accomTax  = roomTotal * 0.04;
-      const subTotal  = roomTotal + accomTax;
-      const hst       = subTotal * 0.13;
-      const total     = subTotal + hst;
+      const room = roomMap[r.roomId]; const price = room?.price ?? 0;
+      const ci = r.checkIn?.toDate  ? r.checkIn.toDate()  : new Date(r.checkIn  || 0);
+      const co = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut || 0);
+      const nights = Math.max(1, Math.ceil((co - ci) / (1000 * 60 * 60 * 24)));
+      const roomTotal = price * nights; const accomTax = roomTotal * 0.04;
+      const subTotal = roomTotal + accomTax; const hst = subTotal * 0.13; const total = subTotal + hst;
       return {
         'Guest Name': r.pname || '', 'Email': r.email || '', 'Phone': r.phone || '',
         'Address': r.address || '', 'City': r.city || '', 'Province': r.province || '',
@@ -365,25 +383,20 @@ const AdminRecentReservations = () => {
         'Company': r.company || '', 'Driver Lic No.': r.driverLicNo || '',
         'DOB': r.dob || '', 'Plate #': r.plateNumber || '',
         'Room Type': r.roomName || '', 'Room No.': r.roomNumber || '',
-        '# of Rooms': r.numberOfRooms || 1,
-        'Adults': r.adults ?? '', 'Kids': r.kids ?? '',
+        '# of Rooms': r.numberOfRooms || 1, 'Adults': r.adults ?? '', 'Kids': r.kids ?? '',
         'Check-In': fmtD(r.checkIn), 'Check-Out': fmtD(r.checkOut),
         'Checked-Out At': fmtD(r.checkedOutAt), 'Nights': nights,
         'Rate/Night ($)': price, 'Room Total ($)': parseFloat(roomTotal.toFixed(2)),
         'Accom. Tax 4% ($)': parseFloat(accomTax.toFixed(2)),
         'Sub Total ($)': parseFloat(subTotal.toFixed(2)),
-        'HST 13% ($)': parseFloat(hst.toFixed(2)),
-        'Total Paid ($)': parseFloat(total.toFixed(2)),
+        'HST 13% ($)': parseFloat(hst.toFixed(2)), 'Total Paid ($)': parseFloat(total.toFixed(2)),
         'Deposit ($)': r.deposit ?? '', 'Returned Deposit ($)': r.returnedDeposit ?? '',
-        'Method of Payment': r.methodOfPayment || '',
-        'Clerk': r.clerk || '',
+        'Method of Payment': r.methodOfPayment || '', 'Clerk': r.clerk || '',
       };
     });
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows); const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Reservations');
-    const dateTag = `_${new Date().toISOString().slice(0, 10)}`;
-    XLSX.writeFile(wb, `reservations${dateTag}.xlsx`);
+    XLSX.writeFile(wb, `reservations_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const TABS = [
@@ -436,11 +449,13 @@ const AdminRecentReservations = () => {
     <th style={{ padding: '10px 14px', fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{label}</th>
   );
 
-  const inp = { background: 'var(--ink-3)', border: '1px solid var(--border-2)', borderRadius: 8, padding: '7px 11px', fontSize: 12, fontFamily: 'var(--font-disp)', color: 'var(--text)', outline: 'none' };
+  const inp       = { background: 'var(--ink-3)', border: '1px solid var(--border-2)', borderRadius: 8, padding: '7px 11px', fontSize: 12, fontFamily: 'var(--font-disp)', color: 'var(--text)', outline: 'none' };
   const pageBtnSt = (dis) => ({ padding: '5px 12px', borderRadius: 6, border: '1px solid var(--border-2)', background: 'var(--ink-3)', color: dis ? 'var(--text-3)' : 'var(--text)', cursor: dis ? 'not-allowed' : 'pointer', fontSize: 11, opacity: dis ? 0.5 : 1 });
+  const mi        = { background: '#1a1a28', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '10px 14px', fontSize: 13, fontFamily: 'DM Sans, sans-serif', color: '#e8e8f0', outline: 'none', width: '100%', boxSizing: 'border-box' };
 
-  // ── Modal input style ────────────────────────────────────────────────────────
-  const mi = { background: '#1a1a28', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '10px 14px', fontSize: 13, fontFamily: 'DM Sans, sans-serif', color: '#e8e8f0', outline: 'none', width: '100%', boxSizing: 'border-box' };
+  // Shared receipt table cell styles
+  const rcTd  = { padding: '4px 0', color: '#9ca3af', fontSize: 11, whiteSpace: 'nowrap' };
+  const rcVal = { padding: '4px 0', textAlign: 'right', fontWeight: 600, color: '#1a1a1a', fontSize: 11 };
 
   const tabInfo = {
     pending:    '⏳ Awaiting admin confirmation. Room is NOT blocked until confirmed.',
@@ -453,14 +468,13 @@ const AdminRecentReservations = () => {
     <>
       <div className="adm-panel" style={{ marginBottom: 20 }}>
 
-        {/* ── Tabs + Add Button ── */}
+        {/* ── Tabs + Add ── */}
         <div className="adm-panel-head">
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
             {TABS.map(tab => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
                 border: 'none', cursor: 'pointer', padding: '6px 14px', borderRadius: 6,
-                fontFamily: 'var(--font-disp)', fontSize: 12, fontWeight: 700,
-                letterSpacing: 1, textTransform: 'uppercase',
+                fontFamily: 'var(--font-disp)', fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase',
                 background: activeTab === tab.id ? tab.activeBg : 'transparent',
                 color:      activeTab === tab.id ? tab.activeColor : 'var(--text-3)',
                 transition: 'all 0.15s',
@@ -474,12 +488,11 @@ const AdminRecentReservations = () => {
           )}
         </div>
 
-        {/* Tab info bar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '8px 14px', marginBottom: 14, fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
           <span>ℹ</span><span>{tabInfo[activeTab]}</span>
         </div>
 
-        {/* ── Filter Bar ── */}
+        {/* ── Filter bar ── */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', background: 'var(--ink-2)', borderRadius: 10, padding: '12px 14px', marginBottom: 16, border: '1px solid var(--border)' }}>
           <div style={{ position: 'relative', flex: '1 1 180px', minWidth: 160 }}>
             <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--text-3)', pointerEvents: 'none' }}>🔍</span>
@@ -587,7 +600,7 @@ const AdminRecentReservations = () => {
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} style={pageBtnSt(page === 1)}>← Prev</button>
               {Array.from({ length: totalPages }, (_, i) => i + 1)
                 .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
-                .reduce((acc, p, idx, arr) => { if (idx > 0 && p - arr[idx-1] > 1) acc.push('…'); acc.push(p); return acc; }, [])
+                .reduce((acc, p, idx, arr) => { if (idx > 0 && p - arr[idx - 1] > 1) acc.push('…'); acc.push(p); return acc; }, [])
                 .map((p, idx) => p === '…'
                   ? <span key={`e${idx}`} style={{ color: 'var(--text-3)', fontSize: 11, padding: '0 4px' }}>…</span>
                   : <button key={p} onClick={() => setPage(p)} style={{ ...pageBtnSt(false), background: page === p ? 'var(--gold)' : 'var(--ink-3)', color: page === p ? '#000' : 'var(--text)', fontWeight: page === p ? 700 : 400 }}>{p}</button>
@@ -598,23 +611,18 @@ const AdminRecentReservations = () => {
         )}
       </div>
 
-      {/* ════════════════════════════════════════════════════════
-          ADD / EDIT MODAL — with all extended fields
-      ════════════════════════════════════════════════════════ */}
+      {/* ══════════════════════════════════════════════════════════
+          ADD / EDIT MODAL
+      ══════════════════════════════════════════════════════════ */}
       {showModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.80)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div style={{ background: '#12121a', borderRadius: 18, width: '100%', maxWidth: 660, border: '1px solid rgba(255,255,255,0.12)', maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 24px 80px rgba(0,0,0,0.6)' }}>
-
-            {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
               <span style={{ fontWeight: 700, fontSize: 16, color: '#e8e8f0' }}>{isEditing ? '✏️ Edit Reservation' : '➕ Add Reservation'}</span>
               <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', color: '#5a5a7a', fontSize: 22, cursor: 'pointer' }}>×</button>
             </div>
-
             <form onSubmit={handleFormSubmit}>
               <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-                {/* ── Personal Info ── */}
                 <SectionDivider label="👤 Personal Information" />
                 <FieldRow>
                   <Field label="Guest Name *"><input style={mi} value={pname} onChange={e => setPName(e.target.value)} required placeholder="Full name" /></Field>
@@ -631,16 +639,12 @@ const AdminRecentReservations = () => {
                   <Field label="Postal / Zip Code"><input style={mi} value={postalCode} onChange={e => setPostalCode(e.target.value)} placeholder="L3K 5V4" /></Field>
                 </FieldRow>
                 <Field label="Company (optional)"><input style={mi} value={company} onChange={e => setCompany(e.target.value)} placeholder="Company name" /></Field>
-
-                {/* ── ID & Vehicle ── */}
                 <SectionDivider label="🪪 Identification & Vehicle" />
                 <FieldRow>
                   <Field label="Driver's Licence No."><input style={mi} value={driverLicNo} onChange={e => setDriverLicNo(e.target.value)} placeholder="Licence number" /></Field>
                   <Field label="Date of Birth"><input type="date" style={mi} value={dob} onChange={e => setDob(e.target.value)} /></Field>
                 </FieldRow>
                 <Field label="Vehicle Plate #"><input style={mi} value={plateNumber} onChange={e => setPlateNumber(e.target.value)} placeholder="ABC 1234" /></Field>
-
-                {/* ── Stay Details ── */}
                 <SectionDivider label="🛏️ Stay Details" />
                 <FieldRow>
                   <Field label="Check-in *"><input type="date" style={mi} value={checkInDate ? new Date(checkInDate).toISOString().split('T')[0] : ''} onChange={e => setCheckInDate(new Date(e.target.value))} required /></Field>
@@ -665,8 +669,6 @@ const AdminRecentReservations = () => {
                   <Field label="Kids"><input type="number" min={0} style={mi} value={kids} onChange={e => setKids(parseInt(e.target.value))} /></Field>
                 </FieldRow>
                 <Field label="# of Rooms"><input type="number" min={1} max={10} style={{ ...mi, maxWidth: 120 }} value={numberOfRooms} onChange={e => setNumberOfRooms(e.target.value)} /></Field>
-
-                {/* ── Payment & Deposit ── */}
                 <SectionDivider label="💳 Payment & Deposit" />
                 <Field label="Method of Payment">
                   <select style={mi} value={methodOfPayment} onChange={e => setMethodOfPayment(e.target.value)}>
@@ -679,9 +681,7 @@ const AdminRecentReservations = () => {
                   <Field label="Returned Deposit ($)"><input type="number" min={0} step="0.01" style={mi} value={returnedDeposit} onChange={e => setReturnedDeposit(e.target.value)} placeholder="0.00" /></Field>
                 </FieldRow>
                 <Field label="Clerk"><input style={mi} value={clerk} onChange={e => setClerk(e.target.value)} placeholder="Staff name" /></Field>
-
               </div>
-
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
                 <button type="button" onClick={() => setShowModal(false)} style={{ padding: '9px 20px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: '#1a1a28', color: '#9898b8', cursor: 'pointer', fontSize: 13, fontFamily: 'DM Sans, sans-serif' }}>Cancel</button>
                 <button type="submit" disabled={saving} style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: saving ? '#6b7280' : '#f0c060', color: '#0a0a0f', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', fontSize: 13, fontFamily: 'DM Sans, sans-serif' }}>
@@ -693,161 +693,189 @@ const AdminRecentReservations = () => {
         </div>
       )}
 
-      {/* ════════════════════════════════════════════════════════
-          RECEIPT MODAL — matches physical form layout
-      ════════════════════════════════════════════════════════ */}
+      {/* ══════════════════════════════════════════════════════════
+          RECEIPT MODAL — compact single-page design
+      ══════════════════════════════════════════════════════════ */}
       {billModal && billDetails && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.80)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: '#ffffff', borderRadius: 16, width: '100%', maxWidth: 520, border: '1px solid #e5e7eb', maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,0.3)', fontFamily: "'DM Sans', sans-serif" }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: '#f1f0ed', borderRadius: 16, width: '100%', maxWidth: 600, maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,0.4)', fontFamily: "'DM Sans', sans-serif" }}>
 
-            {/* Close */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px 0' }}>
-              <button onClick={() => setBillModal(false)} style={{ background: '#f1f0ed', border: '1px solid #e5e7eb', color: '#6b7280', width: 32, height: 32, borderRadius: 8, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>×</button>
+            {/* Close — outside printable area */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 12px 0' }}>
+              <button onClick={() => setBillModal(false)} style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#6b7280', width: 30, height: 30, borderRadius: 7, fontSize: 17, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>×</button>
             </div>
 
-            {/* ── Printable area ── */}
-            <div id="receipt-printable" style={{ background: '#ffffff', padding: '0 0 4px' }}>
-
-              {/* Header */}
-              <div style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)', padding: '22px 24px', color: '#fff' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 40, height: 40, background: 'rgba(255,255,255,0.15)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🌙</div>
+            {/* ═══════ PRINTABLE RECEIPT ═══════ */}
+            <div
+              id="receipt-printable"
+              style={{ background: '#ffffff', margin: '8px 12px 12px', borderRadius: 10, border: '1px solid #e5e7eb', overflow: 'hidden' }}
+            >
+              {/* Header — solid colour, no gradient */}
+              <div style={{ background: '#1e3a5f', padding: '13px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.15)', borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>🌙</div>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 17 }}>GoodNight Inn</div>
-                    <div style={{ fontSize: 10, opacity: 0.7 }}>664 Main St. West, Port Colborne, ON L3K5V4</div>
-                    <div style={{ fontSize: 10, opacity: 0.7 }}>905-835-1818 · www.goodnightinn.ca · manager@goodnightinn.ca</div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: '#fff' }}>GoodNight Inn</div>
+                    <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.6)', marginTop: 1 }}>
+                      664 Main St. W, Port Colborne, ON · 905-835-1818 · HST# 833074875RT0001
+                    </div>
                   </div>
                 </div>
-                <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                  <div>
-                    <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 }}>Guest Registration Receipt</div>
-                    <div style={{ fontSize: 18, fontWeight: 700 }}>{billDetails.guest}</div>
-                    {billDetails.company && <div style={{ fontSize: 12, opacity: 0.8 }}>{billDetails.company}</div>}
-                  </div>
-                  <div style={{ textAlign: 'right', fontSize: 11, opacity: 0.75 }}>
-                    <div>HST# 833074875RT0001</div>
-                    {billDetails.clerk && <div>Clerk: {billDetails.clerk}</div>}
-                  </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 1 }}>Receipt</div>
+                  <div style={{ fontSize: 11, color: '#fff', fontWeight: 600, marginTop: 2 }}>{billDetails.createdAt}</div>
                 </div>
               </div>
 
-              <div style={{ padding: '18px 24px' }}>
+              {/* Guest name strip */}
+              <div style={{ background: '#f8f7f4', borderBottom: '1px solid #e5e7eb', padding: '10px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 9, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1 }}>Guest</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#1a1a1a', marginTop: 1 }}>{billDetails.guest}</div>
+                  <div style={{ fontSize: 10, color: '#6b7280', marginTop: 1 }}>
+                    {[billDetails.email, billDetails.phone].filter(Boolean).join(' · ')}
+                  </div>
+                  {billDetails.company && <div style={{ fontSize: 10, color: '#6b7280' }}>{billDetails.company}</div>}
+                </div>
+                {billDetails.clerk && (
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 9, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1 }}>Clerk</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#374151', marginTop: 1 }}>{billDetails.clerk}</div>
+                  </div>
+                )}
+              </div>
 
-                {/* ── Grid 1: Stay Info ── */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
-                  {[
-                    ['Room Type',    billDetails.roomName],
-                    ['Room No.',     billDetails.roomNumber],
-                    ['# of Rooms',   String(billDetails.numberOfRooms || 1)],
-                    ['Check-in',     billDetails.checkIn],
-                    ['Check-out',    billDetails.checkOut],
-                    ['Nights',       String(billDetails.nights)],
-                    ['Adults',       String(billDetails.adults || '')],
-                    ['Kids',         String(billDetails.kids || 0)],
-                    ['Rate/Night',   `$${billDetails.roomPrice.toFixed(2)}`],
-                  ].map(([label, val]) => (
-                    <div key={label} style={{ background: '#f8f7f4', borderRadius: 8, padding: '10px 12px', border: '1px solid #e5e7eb' }}>
-                      <div style={{ fontSize: 9, color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3 }}>{label}</div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>{val || '—'}</div>
-                    </div>
-                  ))}
+              <div style={{ padding: '12px 18px' }}>
+
+                {/* 2-column: Stay + Guest details */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                  {/* Stay details */}
+                  <div style={{ background: '#f8f7f4', border: '1px solid #e5e7eb', borderRadius: 7, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#6b7280', marginBottom: 7 }}>Stay Details</div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <tbody>
+                        <tr><td style={rcTd}>Room Type</td><td style={rcVal}>{billDetails.roomName}</td></tr>
+                        <tr><td style={rcTd}>Room No.</td><td style={rcVal}>{billDetails.roomNumber}</td></tr>
+                        <tr><td style={rcTd}># of Rooms</td><td style={rcVal}>{billDetails.numberOfRooms || 1}</td></tr>
+                        <tr><td style={rcTd}>Check-in</td><td style={rcVal}>{billDetails.checkIn}</td></tr>
+                        <tr><td style={rcTd}>Check-out</td><td style={rcVal}>{billDetails.checkOut}</td></tr>
+                        <tr><td style={rcTd}>Nights</td><td style={rcVal}>{billDetails.nights}</td></tr>
+                        <tr><td style={rcTd}>Guests</td><td style={rcVal}>{billDetails.adults}{parseInt(billDetails.kids) > 0 ? `, ${billDetails.kids} kids` : ''}</td></tr>
+                        <tr><td style={rcTd}>Rate / Night</td><td style={rcVal}>${billDetails.roomPrice.toFixed(2)}</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Guest details */}
+                  <div style={{ background: '#f8f7f4', border: '1px solid #e5e7eb', borderRadius: 7, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#6b7280', marginBottom: 7 }}>Guest Details</div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <tbody>
+                        {billDetails.address && (
+                          <tr><td style={rcTd}>Address</td><td style={{ ...rcVal, whiteSpace: 'normal', fontSize: 10 }}>{[billDetails.address, billDetails.city, billDetails.province].filter(Boolean).join(', ')}</td></tr>
+                        )}
+                        {billDetails.postalCode  && <tr><td style={rcTd}>Postal</td><td style={rcVal}>{billDetails.postalCode}</td></tr>}
+                        {billDetails.country     && <tr><td style={rcTd}>Country</td><td style={rcVal}>{billDetails.country}</td></tr>}
+                        {billDetails.driverLicNo && <tr><td style={rcTd}>Driver Lic.</td><td style={rcVal}>{billDetails.driverLicNo}</td></tr>}
+                        {billDetails.dob         && <tr><td style={rcTd}>DOB</td><td style={rcVal}>{billDetails.dob}</td></tr>}
+                        {billDetails.plateNumber && <tr><td style={rcTd}>Plate #</td><td style={rcVal}>{billDetails.plateNumber}</td></tr>}
+                        {billDetails.methodOfPayment && <tr><td style={rcTd}>Payment</td><td style={rcVal}>{billDetails.methodOfPayment}</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
-                {/* ── Guest Details ── */}
-                <div style={{ background: '#f8f7f4', borderRadius: 10, border: '1px solid #e5e7eb', padding: '14px 16px', marginBottom: 16 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#6b7280', marginBottom: 10 }}>Guest Details</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px', fontSize: 12 }}>
-                    {[
-                      ['Phone',          billDetails.phone],
-                      ['Email',          billDetails.email],
-                      ['Address',        [billDetails.address, billDetails.city, billDetails.province, billDetails.postalCode, billDetails.country].filter(Boolean).join(', ')],
-                      ['Driver Lic No.', billDetails.driverLicNo],
-                      ['Date of Birth',  billDetails.dob],
-                      ['Plate #',        billDetails.plateNumber],
-                    ].map(([label, val]) => val ? (
-                      <div key={label}>
-                        <span style={{ color: '#9ca3af', fontWeight: 600 }}>{label}: </span>
-                        <span style={{ color: '#374151' }}>{val}</span>
-                      </div>
-                    ) : null)}
-                  </div>
+                {/* Notice — condensed */}
+                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '7px 10px', marginBottom: 10, fontSize: 9, color: '#92400e', lineHeight: 1.5 }}>
+                  <strong>Notice to Guests:</strong> Management reserves the right to refuse service. Not responsible for accidents, injury, or loss of valuables. Guests are responsible for all charges incurred during and after their stay. Items removed or damaged will be billed to your account.
                 </div>
 
-                {/* ── Notice to Guests ── */}
-                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 11, color: '#92400e', lineHeight: 1.6 }}>
-                  <strong>Notice to Guests:</strong> This property is owned, and management reserves the right to refuse service to anyone and will not be responsible for accidents or injury to our guests or loss of money, jewellery or valuable of any kind. We reserve the right to evict any persons being neglect or mishandling hotel property or any boisterous behaviour. Any items inadvertently misused or removed will be billed to your account. It is also understood that you are responsible for any charges incurred during your stay and for those who are realized after your departure.
-                </div>
+                {/* Billing summary */}
+                <div style={{ border: '1px solid #e5e7eb', borderRadius: 7, overflow: 'hidden', marginBottom: 10 }}>
+                  <div style={{ background: '#f8f7f4', padding: '6px 12px', borderBottom: '1px solid #e5e7eb' }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#6b7280' }}>Billing Summary</span>
+                  </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <tbody>
+                      <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
+                        <td style={{ padding: '6px 12px', fontSize: 11, color: '#374151' }}>Room Total ({billDetails.nights} × ${billDetails.roomPrice.toFixed(2)})</td>
+                        <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 600, fontSize: 11, color: '#1a1a1a' }}>${billDetails.roomTotal.toFixed(2)}</td>
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
+                        <td style={{ padding: '6px 12px', fontSize: 11, color: '#374151' }}>Accommodation Tax (4%)</td>
+                        <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 600, fontSize: 11, color: '#1a1a1a' }}>${billDetails.accomTax.toFixed(2)}</td>
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid #dbeafe', background: '#eff6ff' }}>
+                        <td style={{ padding: '6px 12px', fontSize: 11, fontWeight: 700, color: '#1e3a5f' }}>Sub Total</td>
+                        <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 700, fontSize: 11, color: '#1e3a5f' }}>${billDetails.subTotal.toFixed(2)}</td>
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                        <td style={{ padding: '6px 12px', fontSize: 11, color: '#374151' }}>HST (13%)</td>
+                        <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 600, fontSize: 11, color: '#1a1a1a' }}>${billDetails.hstAmount.toFixed(2)}</td>
+                      </tr>
+                      {/* Grand total — solid colour */}
+                      <tr style={{ background: '#1e3a5f' }}>
+                        <td style={{ padding: '10px 12px' }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>Total (CAD)</div>
+                          <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.6)', marginTop: 1 }}>All taxes included</div>
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: 22, fontWeight: 800, color: '#fff', fontFamily: 'monospace' }}>
+                          ${billDetails.totalAmount.toFixed(2)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
 
-                {/* ── Billing Summary ── */}
-                <div style={{ borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden', marginBottom: 16 }}>
-                  <div style={{ background: '#f8f7f4', padding: '9px 16px', borderBottom: '1px solid #e5e7eb' }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#6b7280' }}>Billing Summary</span>
-                  </div>
-                  {[
-                    [`Room Total (${billDetails.nights} × $${billDetails.roomPrice.toFixed(2)})`, `$${billDetails.roomTotal.toFixed(2)}`],
-                    ['Accommodation Tax (4%)', `$${billDetails.accomTax.toFixed(2)}`],
-                  ].map(([label, val]) => (
-                    <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid #f3f4f6', background: '#fff' }}>
-                      <span style={{ fontSize: 13, color: '#374151' }}>{label}</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>{val}</span>
-                    </div>
-                  ))}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid #dbeafe', background: '#eff6ff' }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1e3a5f' }}>Sub Total</span>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: '#1e3a5f' }}>${billDetails.subTotal.toFixed(2)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid #e5e7eb', background: '#fff' }}>
-                    <span style={{ fontSize: 13, color: '#374151' }}>HST (13%)</span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>${billDetails.hstAmount.toFixed(2)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px', background: 'linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)' }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Total (CAD)</div>
-                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)' }}>All taxes included</div>
-                    </div>
-                    <div style={{ fontSize: 30, fontWeight: 800, color: '#fff', fontFamily: 'monospace' }}>${billDetails.totalAmount.toFixed(2)}</div>
-                  </div>
-
-                  {/* Deposit row */}
-                  {(billDetails.deposit || billDetails.returnedDeposit) && (
-                    <div style={{ background: '#f8f7f4', padding: '10px 16px', display: 'flex', gap: 24 }}>
+                  {/* Deposit / payment footer */}
+                  {(billDetails.deposit != null || billDetails.returnedDeposit != null || billDetails.methodOfPayment) && (
+                    <div style={{ background: '#f8f7f4', padding: '6px 12px', display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 10 }}>
                       {billDetails.deposit != null && (
-                        <div><span style={{ fontSize: 11, color: '#6b7280' }}>Deposit: </span><span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>${Number(billDetails.deposit).toFixed(2)}</span></div>
+                        <span><span style={{ color: '#9ca3af' }}>Deposit: </span><span style={{ fontWeight: 600, color: '#1a1a1a' }}>${Number(billDetails.deposit).toFixed(2)}</span></span>
                       )}
                       {billDetails.returnedDeposit != null && (
-                        <div><span style={{ fontSize: 11, color: '#6b7280' }}>Returned: </span><span style={{ fontSize: 13, fontWeight: 600, color: '#16a34a' }}>${Number(billDetails.returnedDeposit).toFixed(2)}</span></div>
+                        <span><span style={{ color: '#9ca3af' }}>Returned: </span><span style={{ fontWeight: 600, color: '#16a34a' }}>${Number(billDetails.returnedDeposit).toFixed(2)}</span></span>
                       )}
                       {billDetails.methodOfPayment && (
-                        <div><span style={{ fontSize: 11, color: '#6b7280' }}>Payment: </span><span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>{billDetails.methodOfPayment}</span></div>
+                        <span><span style={{ color: '#9ca3af' }}>Method: </span><span style={{ fontWeight: 600, color: '#1a1a1a' }}>{billDetails.methodOfPayment}</span></span>
                       )}
                     </div>
                   )}
                 </div>
 
-                {/* ── Signature ── */}
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, paddingTop: 8 }}>
+                {/* Signature line */}
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16 }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 4 }}>Guest's Signature</div>
-                    <div style={{ borderBottom: '1px solid #d1d5db', height: 32 }} />
+                    <div style={{ fontSize: 9, color: '#9ca3af', marginBottom: 3 }}>Guest's Signature</div>
+                    <div style={{ borderBottom: '1px solid #d1d5db', height: 26 }} />
                   </div>
-                  <div style={{ textAlign: 'center', fontSize: 10, color: '#9ca3af', lineHeight: 1.6 }}>
+                  <div style={{ fontSize: 9, color: '#9ca3af', textAlign: 'right', lineHeight: 1.6 }}>
                     664 Main St. W, Port Colborne, ON L3K 5V4<br />
                     905-835-1818 · manager@goodnightinn.ca
                   </div>
                 </div>
+
               </div>
             </div>
-            {/* ── End printable area ── */}
+            {/* ═══════ END PRINTABLE AREA ═══════ */}
 
-            {/* Actions */}
-            <div style={{ display: 'flex', gap: 8, padding: '14px 24px 20px', borderTop: '1px solid #e5e7eb', flexWrap: 'wrap' }}>
-              <button onClick={handleDownloadPdf} disabled={generatingPdf} style={{ flex: 1, padding: '11px 14px', borderRadius: 10, border: '1.5px solid #d1d5db', background: generatingPdf ? '#f1f0ed' : '#f8f7f4', color: generatingPdf ? '#9ca3af' : '#374151', cursor: generatingPdf ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            {/* Action buttons */}
+            <div style={{ display: 'flex', gap: 8, padding: '0 12px 14px', flexWrap: 'wrap' }}>
+              <button
+                onClick={handleDownloadPdf}
+                disabled={generatingPdf}
+                style={{ flex: 1, padding: '11px 14px', borderRadius: 10, border: '1.5px solid #d1d5db', background: generatingPdf ? '#f1f0ed' : '#fff', color: generatingPdf ? '#9ca3af' : '#374151', cursor: generatingPdf ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+              >
                 {generatingPdf ? '⏳ Generating…' : '⬇ Download PDF'}
               </button>
-              <button onClick={sendBill} disabled={sendingEmail} style={{ flex: 2, padding: '11px 14px', borderRadius: 10, border: 'none', background: sendingEmail ? '#93c5fd' : '#2563eb', color: '#fff', fontWeight: 700, cursor: sendingEmail ? 'not-allowed' : 'pointer', fontSize: 13, fontFamily: "'DM Sans', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <button
+                onClick={sendBill}
+                disabled={sendingEmail}
+                style={{ flex: 2, padding: '11px 14px', borderRadius: 10, border: 'none', background: sendingEmail ? '#93c5fd' : '#2563eb', color: '#fff', fontWeight: 700, cursor: sendingEmail ? 'not-allowed' : 'pointer', fontSize: 13, fontFamily: "'DM Sans', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+              >
                 {sendingEmail ? '⏳ Sending…' : '📧 Email Receipt to Guest'}
               </button>
             </div>
+
           </div>
         </div>
       )}
