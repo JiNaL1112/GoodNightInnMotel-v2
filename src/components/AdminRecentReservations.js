@@ -17,6 +17,7 @@ const ROOM_SLOTS = {
   'Kitchenette':    [401, 402, 403, 404, 405],
 };
 const PAGE_SIZE = 8;
+const PAYMENT_METHODS = ['Cash', 'Credit Card', 'Debit Card', 'E-Transfer', 'Other'];
 
 const SORT_COLS = {
   guest:    r => r.pname?.toLowerCase() || '',
@@ -26,27 +27,19 @@ const SORT_COLS = {
   checkOut: r => (r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut || 0)).getTime(),
 };
 
-// ── 4-state status engine ─────────────────────────────────────────────────────
 const getEffectiveStatus = (r) => {
   if (r.status === 'checked-out') return 'checked-out';
-
   if (r.status === 'booked') {
     const today    = new Date(); today.setHours(0, 0, 0, 0);
-    const checkIn  = r.checkIn?.toDate  ? r.checkIn.toDate()  : new Date(r.checkIn  || 0);
     const checkOut = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut || 0);
-    const ciDay    = new Date(checkIn);  ciDay.setHours(0, 0, 0, 0);
     const coDay    = new Date(checkOut); coDay.setHours(0, 0, 0, 0);
-
     if (coDay < today) return 'checked-out';
     if (r.checkedInAt) return 'in-house';
-    if (ciDay > today) return 'upcoming';
     return 'upcoming';
   }
-
   return 'pending';
 };
 
-// ── Sort arrows ───────────────────────────────────────────────────────────────
 const SortArrow = ({ col, sortCol, sortDir }) => {
   const active = sortCol === col;
   return (
@@ -57,6 +50,26 @@ const SortArrow = ({ col, sortCol, sortDir }) => {
   );
 };
 
+// ── Reusable field components for the modal ───────────────────────────────────
+const FieldRow = ({ children }) => (
+  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>{children}</div>
+);
+
+const Field = ({ label, children }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+    <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: '#5a5a7a' }}>{label}</label>
+    {children}
+  </div>
+);
+
+const SectionDivider = ({ label }) => (
+  <div style={{
+    fontSize: 10, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase',
+    color: '#40e0c8', padding: '10px 0 6px',
+    borderBottom: '1px solid rgba(255,255,255,0.07)', marginBottom: 4,
+  }}>{label}</div>
+);
+
 const AdminRecentReservations = () => {
   const {
     rooms,
@@ -65,6 +78,22 @@ const AdminRecentReservations = () => {
     adults, setAdults, kids, setKids,
     selectedRoomId, setSelectedRoomId,
     selectedRoomName, setSelectedRoomName,
+
+    // Extended fields
+    address,         setAddress,
+    city,            setCity,
+    province,        setProvince,
+    country,         setCountry,
+    postalCode,      setPostalCode,
+    company,         setCompany,
+    driverLicNo,     setDriverLicNo,
+    dob,             setDob,
+    deposit,         setDeposit,
+    returnedDeposit, setReturnedDeposit,
+    methodOfPayment, setMethodOfPayment,
+    plateNumber,     setPlateNumber,
+    clerk,           setClerk,
+    numberOfRooms,   setNumberOfRooms,
   } = useContext(RoomContext);
 
   const [reservations,   setReservations]   = useState([]);
@@ -110,17 +139,14 @@ const AdminRecentReservations = () => {
   };
 
   const handleCheckIn = async (r) => {
-    if (!window.confirm(`Check in ${r.pname}? This confirms the guest has arrived and the room is now occupied.`)) return;
+    if (!window.confirm(`Check in ${r.pname}?`)) return;
     await updateDoc(doc(db, 'reservations', r.id), { checkedInAt: new Date() });
     fetchReservations();
   };
 
   const handleCheckOut = async (r) => {
-    if (!window.confirm(`Check out ${r.pname}? This will mark the reservation as completed.`)) return;
-    await updateDoc(doc(db, 'reservations', r.id), {
-      status: 'checked-out',
-      checkedOutAt: new Date(),
-    });
+    if (!window.confirm(`Check out ${r.pname}?`)) return;
+    await updateDoc(doc(db, 'reservations', r.id), { status: 'checked-out', checkedOutAt: new Date() });
     fetchReservations();
   };
 
@@ -130,26 +156,58 @@ const AdminRecentReservations = () => {
     fetchReservations();
   };
 
-  const openAdd = () => { setIsEditing(false); setEditTarget(null); setRoomNumber(''); setShowModal(true); };
+  const openAdd = () => {
+    setIsEditing(false); setEditTarget(null); setRoomNumber('');
+    // Reset extended fields
+    setAddress(''); setCity(''); setProvince(''); setCountry(''); setPostalCode('');
+    setCompany(''); setDriverLicNo(''); setDob(''); setDeposit('');
+    setReturnedDeposit(''); setMethodOfPayment(''); setPlateNumber('');
+    setClerk(''); setNumberOfRooms(1);
+    setShowModal(true);
+  };
 
   const openEdit = (res) => {
     setIsEditing(true); setEditTarget(res);
+    // Core
     setPName(res.pname); setEmail(res.email); setPhone(res.phone);
     setCheckInDate(res.checkIn?.toDate?.() || new Date());
     setCheckOutDate(res.checkOut?.toDate?.() || new Date());
     setAdults(res.adults); setKids(res.kids);
     setSelectedRoomId(res.roomId); setSelectedRoomName(res.roomName);
     setRoomNumber(res.roomNumber || '');
+    // Extended
+    setAddress(res.address || '');
+    setCity(res.city || '');
+    setProvince(res.province || '');
+    setCountry(res.country || '');
+    setPostalCode(res.postalCode || '');
+    setCompany(res.company || '');
+    setDriverLicNo(res.driverLicNo || '');
+    setDob(res.dob || '');
+    setDeposit(res.deposit != null ? String(res.deposit) : '');
+    setReturnedDeposit(res.returnedDeposit != null ? String(res.returnedDeposit) : '');
+    setMethodOfPayment(res.methodOfPayment || '');
+    setPlateNumber(res.plateNumber || '');
+    setClerk(res.clerk || '');
+    setNumberOfRooms(res.numberOfRooms || 1);
     setShowModal(true);
   };
 
   const handleFormSubmit = async (e) => {
     e.preventDefault(); setSaving(true);
     const data = {
+      // Core
       pname, email, phone, checkIn: checkInDate, checkOut: checkOutDate,
       adults, kids, roomId: selectedRoomId, roomName: selectedRoomName,
       roomNumber, status: 'booked',
       [isEditing ? 'updatedAt' : 'createdAt']: new Date(),
+      // Extended
+      address, city, province, country, postalCode,
+      company, driverLicNo, dob,
+      deposit:         deposit         ? Number(deposit)         : null,
+      returnedDeposit: returnedDeposit ? Number(returnedDeposit) : null,
+      methodOfPayment, plateNumber, clerk,
+      numberOfRooms:   Number(numberOfRooms) || 1,
     };
     try {
       if (isEditing && editTarget?.id) await updateDoc(doc(db, 'reservations', editTarget.id), data);
@@ -163,48 +221,38 @@ const AdminRecentReservations = () => {
     const roomSnap = await getDocs(collection(db, 'rooms'));
     const room = roomSnap.docs.map(d => ({ ...d.data(), id: d.id })).find(r => r.id === res.roomId);
     if (!room) return;
-
     const checkIn  = res.checkIn?.toDate  ? res.checkIn.toDate()  : new Date(res.checkIn);
     const checkOut = res.checkOut?.toDate ? res.checkOut.toDate() : new Date(res.checkOut);
-
     const nights    = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
     const roomTotal = room.price * nights;
     const accomTax  = roomTotal * 0.04;
     const subTotal  = roomTotal + accomTax;
     const hst       = subTotal * 0.13;
     const total     = subTotal + hst;
-
     setBillDetails({
-      guest:       res.pname,
-      roomName:    room.name,
-      roomNumber:  res.roomNumber || 'N/A',
-      checkIn:     checkIn.toDateString(),
-      checkOut:    checkOut.toDateString(),
-      nights,
-      roomPrice:   room.price,
-      roomTotal,
-      accomTax,
-      subTotal,
-      hstAmount:   hst,
-      totalAmount: total,
-      email:       res.email,
+      guest: res.pname, email: res.email, phone: res.phone,
+      address: res.address, city: res.city, province: res.province,
+      country: res.country, postalCode: res.postalCode,
+      company: res.company, driverLicNo: res.driverLicNo, dob: res.dob,
+      plateNumber: res.plateNumber,
+      roomName: room.name, roomNumber: res.roomNumber || 'N/A',
+      numberOfRooms: res.numberOfRooms || 1,
+      checkIn: checkIn.toDateString(), checkOut: checkOut.toDateString(),
+      nights, roomPrice: room.price, roomTotal, accomTax, subTotal,
+      hstAmount: hst, totalAmount: total,
+      deposit: res.deposit, returnedDeposit: res.returnedDeposit,
+      methodOfPayment: res.methodOfPayment,
+      clerk: res.clerk, adults: res.adults, kids: res.kids,
     });
     setBillModal(true);
   };
 
-  // ── PDF Download ─────────────────────────────────────────────────────────────
   const handleDownloadPdf = async () => {
     const el = document.getElementById('receipt-printable');
     if (!el) return;
     setGeneratingPdf(true);
     try {
-      const canvas = await html2canvas(el, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-      });
-
+      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false });
       const imgData   = canvas.toDataURL('image/png');
       const pdf       = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const pageWidth = pdf.internal.pageSize.getWidth();
@@ -212,17 +260,14 @@ const AdminRecentReservations = () => {
       const imgWidth  = pageWidth - 20;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       const yOffset   = imgHeight < pageHeight ? (pageHeight - imgHeight) / 2 : 10;
-
       pdf.addImage(imgData, 'PNG', 10, yOffset, imgWidth, imgHeight);
       const safeName = (billDetails.guest || 'guest').replace(/\s+/g, '_');
       const dateStr  = new Date().toISOString().slice(0, 10);
       pdf.save(`receipt_${safeName}_${dateStr}.pdf`);
     } catch (err) {
       console.error('PDF generation failed:', err);
-      alert('PDF generation failed. Please try the Print button instead.');
-    } finally {
-      setGeneratingPdf(false);
-    }
+      alert('PDF generation failed.');
+    } finally { setGeneratingPdf(false); }
   };
 
   const sendBill = async () => {
@@ -230,19 +275,16 @@ const AdminRecentReservations = () => {
     setSendingEmail(true);
     try {
       await emailjs.send('service_d3cy1e9', 'template_11t5n5a', {
-        guest:        billDetails.guest,
-        room_name:    billDetails.roomName,
-        room_number:  billDetails.roomNumber,
-        check_in:     billDetails.checkIn,
-        check_out:    billDetails.checkOut,
-        nights:       billDetails.nights,
-        rate:         `$${billDetails.roomPrice.toFixed(2)}`,
-        room_total:   `$${billDetails.roomTotal.toFixed(2)}`,
-        accom_tax:    `$${billDetails.accomTax.toFixed(2)}`,
-        subtotal:     `$${billDetails.subTotal.toFixed(2)}`,
-        hst:          `$${billDetails.hstAmount.toFixed(2)}`,
-        total:        `$${billDetails.totalAmount.toFixed(2)}`,
-        to_email:     billDetails.email,
+        guest: billDetails.guest, room_name: billDetails.roomName,
+        room_number: billDetails.roomNumber, check_in: billDetails.checkIn,
+        check_out: billDetails.checkOut, nights: billDetails.nights,
+        rate: `$${billDetails.roomPrice.toFixed(2)}`,
+        room_total: `$${billDetails.roomTotal.toFixed(2)}`,
+        accom_tax: `$${billDetails.accomTax.toFixed(2)}`,
+        subtotal: `$${billDetails.subTotal.toFixed(2)}`,
+        hst: `$${billDetails.hstAmount.toFixed(2)}`,
+        total: `$${billDetails.totalAmount.toFixed(2)}`,
+        to_email: billDetails.email,
       }, '8nzBG6xAhz4eIyVij');
       alert('Receipt sent!');
     } catch (err) { alert('Send failed'); }
@@ -255,9 +297,7 @@ const AdminRecentReservations = () => {
     return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  // ── Tag each reservation ──────────────────────────────────────────────────
   const tagged = reservations.map(r => ({ ...r, _eff: getEffectiveStatus(r) }));
-
   const pendingList    = tagged.filter(r => r._eff === 'pending');
   const upcomingList   = tagged.filter(r => r._eff === 'upcoming');
   const inHouseList    = tagged.filter(r => r._eff === 'in-house');
@@ -297,70 +337,55 @@ const AdminRecentReservations = () => {
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const shown      = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
   const hasFilters = search || filterRoom || filterFrom || filterTo;
   const clearFilters = () => { setSearch(''); setFilterRoom(''); setFilterFrom(''); setFilterTo(''); };
 
-  // ── Excel export ────────────────────────────────────────────────────────────
   const handleExportExcel = async () => {
-    if (sorted.length === 0) { alert('No checked-out records to export.'); return; }
-
+    if (sorted.length === 0) { alert('No records to export.'); return; }
     const roomSnap = await getDocs(collection(db, 'rooms'));
     const roomMap  = {};
     roomSnap.docs.forEach(d => { roomMap[d.id] = d.data(); });
-
     const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.2/package/xlsx.mjs');
-
-    const fmtD = (ts) => {
-      if (!ts) return '';
-      const d = ts?.toDate ? ts.toDate() : new Date(ts);
-      return d.toLocaleDateString('en-CA');
-    };
-
+    const fmtD = (ts) => { if (!ts) return ''; const d = ts?.toDate ? ts.toDate() : new Date(ts); return d.toLocaleDateString('en-CA'); };
     const rows = sorted.map(r => {
-      const room      = roomMap[r.roomId];
-      const price     = room?.price ?? 0;
-      const checkIn   = r.checkIn?.toDate  ? r.checkIn.toDate()  : new Date(r.checkIn  || 0);
-      const checkOut  = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut || 0);
-      const nights    = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
+      const room = roomMap[r.roomId];
+      const price = room?.price ?? 0;
+      const checkIn  = r.checkIn?.toDate  ? r.checkIn.toDate()  : new Date(r.checkIn  || 0);
+      const checkOut = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut || 0);
+      const nights = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
       const roomTotal = price * nights;
       const accomTax  = roomTotal * 0.04;
       const subTotal  = roomTotal + accomTax;
       const hst       = subTotal * 0.13;
       const total     = subTotal + hst;
-
       return {
-        'Guest Name':           r.pname        || '',
-        'Email':                r.email        || '',
-        'Phone':                r.phone        || '',
-        'Room Type':            r.roomName     || '',
-        'Room No.':             r.roomNumber   || '',
-        'Adults':               r.adults       ?? '',
-        'Kids':                 r.kids         ?? '',
-        'Check-In':             fmtD(r.checkIn),
-        'Check-Out':            fmtD(r.checkOut),
-        'Checked-Out At':       fmtD(r.checkedOutAt),
-        'Nights':               nights,
-        'Rate/Night ($)':       price,
-        'Room Total ($)':       parseFloat(roomTotal.toFixed(2)),
-        'Accom. Tax 4% ($)':    parseFloat(accomTax.toFixed(2)),
-        'Sub Total ($)':        parseFloat(subTotal.toFixed(2)),
-        'HST 13% ($)':          parseFloat(hst.toFixed(2)),
-        'Total Paid ($)':       parseFloat(total.toFixed(2)),
+        'Guest Name': r.pname || '', 'Email': r.email || '', 'Phone': r.phone || '',
+        'Address': r.address || '', 'City': r.city || '', 'Province': r.province || '',
+        'Country': r.country || '', 'Postal Code': r.postalCode || '',
+        'Company': r.company || '', 'Driver Lic No.': r.driverLicNo || '',
+        'DOB': r.dob || '', 'Plate #': r.plateNumber || '',
+        'Room Type': r.roomName || '', 'Room No.': r.roomNumber || '',
+        '# of Rooms': r.numberOfRooms || 1,
+        'Adults': r.adults ?? '', 'Kids': r.kids ?? '',
+        'Check-In': fmtD(r.checkIn), 'Check-Out': fmtD(r.checkOut),
+        'Checked-Out At': fmtD(r.checkedOutAt), 'Nights': nights,
+        'Rate/Night ($)': price, 'Room Total ($)': parseFloat(roomTotal.toFixed(2)),
+        'Accom. Tax 4% ($)': parseFloat(accomTax.toFixed(2)),
+        'Sub Total ($)': parseFloat(subTotal.toFixed(2)),
+        'HST 13% ($)': parseFloat(hst.toFixed(2)),
+        'Total Paid ($)': parseFloat(total.toFixed(2)),
+        'Deposit ($)': r.deposit ?? '', 'Returned Deposit ($)': r.returnedDeposit ?? '',
+        'Method of Payment': r.methodOfPayment || '',
+        'Clerk': r.clerk || '',
       };
     });
-
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [22,28,16,18,10,8,6,14,14,18,8,14,14,14,14,12,14].map(w => ({ wch: w }));
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Checked Out');
-    const dateTag = filterFrom && filterTo
-      ? `_${filterFrom}_to_${filterTo}`
-      : `_${new Date().toISOString().slice(0, 10)}`;
-    XLSX.writeFile(wb, `checkout_guests${dateTag}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, 'Reservations');
+    const dateTag = `_${new Date().toISOString().slice(0, 10)}`;
+    XLSX.writeFile(wb, `reservations${dateTag}.xlsx`);
   };
 
-  // ── Tab config ─────────────────────────────────────────────────────────────
   const TABS = [
     { id: 'pending',    label: '⏳ Pending',     count: pendingList.length,    activeColor: '#f0c060', activeBg: 'rgba(240,192,96,0.15)'  },
     { id: 'upcoming',   label: '🕐 Upcoming',    count: upcomingList.length,   activeColor: '#60b0f0', activeBg: 'rgba(96,176,240,0.15)'  },
@@ -376,42 +401,28 @@ const AdminRecentReservations = () => {
       'checked-out': { label: '🏁 Checked Out', bg: 'rgba(64,224,200,0.12)', color: '#40e0c8' },
     };
     const s = map[eff] || map['pending'];
-    return (
-      <span style={{
-        display: 'inline-block', padding: '3px 10px', borderRadius: 99, fontSize: 11,
-        fontWeight: 700, background: s.bg, color: s.color,
-        border: `1px solid ${s.color}30`, whiteSpace: 'nowrap',
-      }}>{s.label}</span>
-    );
+    return <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 99, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color, border: `1px solid ${s.color}30`, whiteSpace: 'nowrap' }}>{s.label}</span>;
   };
 
   const ActionButtons = ({ r }) => {
     const eff = r._eff;
     if (eff === 'pending') return (
-      <>
-        <button className="adm-btn adm-btn-confirm" onClick={() => handleConfirm(r.id)}>Confirm</button>
-        <button className="adm-btn adm-btn-reject"  onClick={() => handleDelete(r.id)}>Reject</button>
-      </>
+      <><button className="adm-btn adm-btn-confirm" onClick={() => handleConfirm(r.id)}>Confirm</button>
+      <button className="adm-btn adm-btn-reject" onClick={() => handleDelete(r.id)}>Reject</button></>
     );
     if (eff === 'upcoming') return (
-      <>
-        <button className="adm-btn" style={{ background: 'rgba(80,216,144,0.15)', color: '#50d890', fontWeight: 700, border: '1px solid rgba(80,216,144,0.3)', whiteSpace: 'nowrap' }} onClick={() => handleCheckIn(r)}>🏨 Check In</button>
-        <button className="adm-btn adm-btn-edit"   onClick={() => openEdit(r)}>Edit</button>
-        <button className="adm-btn adm-btn-reject"  onClick={() => handleDelete(r.id)}>Cancel</button>
-      </>
+      <><button className="adm-btn" style={{ background: 'rgba(80,216,144,0.15)', color: '#50d890', fontWeight: 700, border: '1px solid rgba(80,216,144,0.3)', whiteSpace: 'nowrap' }} onClick={() => handleCheckIn(r)}>🏨 Check In</button>
+      <button className="adm-btn adm-btn-edit" onClick={() => openEdit(r)}>Edit</button>
+      <button className="adm-btn adm-btn-reject" onClick={() => handleDelete(r.id)}>Cancel</button></>
     );
     if (eff === 'in-house') return (
-      <>
-        <button className="adm-btn" style={{ background: 'rgba(240,96,144,0.15)', color: '#f06090', fontWeight: 700, border: '1px solid rgba(240,96,144,0.3)', whiteSpace: 'nowrap' }} onClick={() => handleCheckOut(r)}>🏁 Check Out</button>
-        <button className="adm-btn adm-btn-edit" onClick={() => openEdit(r)}>Edit</button>
-        <button className="adm-btn adm-btn-bill" onClick={() => generateBill(r)}>Receipt</button>
-      </>
+      <><button className="adm-btn" style={{ background: 'rgba(240,96,144,0.15)', color: '#f06090', fontWeight: 700, border: '1px solid rgba(240,96,144,0.3)', whiteSpace: 'nowrap' }} onClick={() => handleCheckOut(r)}>🏁 Check Out</button>
+      <button className="adm-btn adm-btn-edit" onClick={() => openEdit(r)}>Edit</button>
+      <button className="adm-btn adm-btn-bill" onClick={() => generateBill(r)}>Receipt</button></>
     );
     if (eff === 'checked-out') return (
-      <>
-        <button className="adm-btn adm-btn-bill"   onClick={() => generateBill(r)}>Receipt</button>
-        <button className="adm-btn adm-btn-reject"  onClick={() => handleDelete(r.id)}>Remove</button>
-      </>
+      <><button className="adm-btn adm-btn-bill" onClick={() => generateBill(r)}>Receipt</button>
+      <button className="adm-btn adm-btn-reject" onClick={() => handleDelete(r.id)}>Remove</button></>
     );
     return null;
   };
@@ -428,9 +439,12 @@ const AdminRecentReservations = () => {
   const inp = { background: 'var(--ink-3)', border: '1px solid var(--border-2)', borderRadius: 8, padding: '7px 11px', fontSize: 12, fontFamily: 'var(--font-disp)', color: 'var(--text)', outline: 'none' };
   const pageBtnSt = (dis) => ({ padding: '5px 12px', borderRadius: 6, border: '1px solid var(--border-2)', background: 'var(--ink-3)', color: dis ? 'var(--text-3)' : 'var(--text)', cursor: dis ? 'not-allowed' : 'pointer', fontSize: 11, opacity: dis ? 0.5 : 1 });
 
+  // ── Modal input style ────────────────────────────────────────────────────────
+  const mi = { background: '#1a1a28', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '10px 14px', fontSize: 13, fontFamily: 'DM Sans, sans-serif', color: '#e8e8f0', outline: 'none', width: '100%', boxSizing: 'border-box' };
+
   const tabInfo = {
     pending:    '⏳ Awaiting admin confirmation. Room is NOT blocked until confirmed.',
-    upcoming:   '🕐 Confirmed bookings arriving in future. Room is reserved but NOT yet occupied — click Check In when guest arrives.',
+    upcoming:   '🕐 Confirmed bookings arriving in future. Click Check In when guest arrives.',
     inhouse:    '✅ Guest is currently in the room. Room is occupied.',
     checkedout: '🏁 Completed stays.',
   };
@@ -460,10 +474,9 @@ const AdminRecentReservations = () => {
           )}
         </div>
 
-        {/* ── Tab info bar ── */}
+        {/* Tab info bar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '8px 14px', marginBottom: 14, fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-          <span>ℹ</span>
-          <span>{tabInfo[activeTab]}</span>
+          <span>ℹ</span><span>{tabInfo[activeTab]}</span>
         </div>
 
         {/* ── Filter Bar ── */}
@@ -488,11 +501,7 @@ const AdminRecentReservations = () => {
             <button onClick={clearFilters} style={{ ...inp, cursor: 'pointer', color: '#f06090', border: '1px solid rgba(240,96,144,0.3)' }}>✕ Clear</button>
           )}
           {activeTab === 'checkedout' && (
-            <button
-              onClick={handleExportExcel}
-              title={sorted.length === 0 ? 'No data to export' : `Export ${sorted.length} record(s) to Excel`}
-              style={{ ...inp, cursor: 'pointer', color: '#40e0c8', border: '1px solid rgba(64,224,200,0.35)', background: 'rgba(64,224,200,0.08)', fontWeight: 700, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}
-            >
+            <button onClick={handleExportExcel} style={{ ...inp, cursor: 'pointer', color: '#40e0c8', border: '1px solid rgba(64,224,200,0.35)', background: 'rgba(64,224,200,0.08)', fontWeight: 700, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}>
               ⬇ Export Excel
             </button>
           )}
@@ -523,14 +532,14 @@ const AdminRecentReservations = () => {
                   <SortTh col="checkIn"  label="Check-in" />
                   <SortTh col="checkOut" label="Check-out"/>
                   {staticTh('Guests')}
+                  {staticTh('Payment')}
                   {staticTh('Status')}
                   {staticTh('Actions')}
                 </tr>
               </thead>
               <tbody>
                 {shown.map((r, i) => (
-                  <tr key={r.id}
-                    style={{ opacity: r._eff === 'checked-out' ? 0.7 : 1 }}
+                  <tr key={r.id} style={{ opacity: r._eff === 'checked-out' ? 0.7 : 1 }}
                     onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
@@ -542,6 +551,7 @@ const AdminRecentReservations = () => {
                         <div>
                           <div className="adm-guest-name">{r.pname}</div>
                           <div className="adm-guest-email">{r.email}</div>
+                          {r.phone && <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{r.phone}</div>}
                         </div>
                       </div>
                     </td>
@@ -550,6 +560,10 @@ const AdminRecentReservations = () => {
                     <td>{fmtDate(r.checkIn)}</td>
                     <td>{fmtDate(r.checkOut)}</td>
                     <td style={{ fontFamily: 'var(--font-mono)' }}>{r.adults}A {r.kids > 0 ? `${r.kids}K` : ''}</td>
+                    <td style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                      {r.methodOfPayment || '—'}
+                      {r.deposit ? <div style={{ color: '#50d890', fontSize: 10 }}>Dep: ${r.deposit}</div> : null}
+                    </td>
                     <td><StatusBadge eff={r._eff} /></td>
                     <td>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -584,56 +598,93 @@ const AdminRecentReservations = () => {
         )}
       </div>
 
-      {/* ── Add/Edit Modal ── */}
+      {/* ════════════════════════════════════════════════════════
+          ADD / EDIT MODAL — with all extended fields
+      ════════════════════════════════════════════════════════ */}
       {showModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: '#ffffff', borderRadius: 16, width: '100%', maxWidth: 540, border: '1px solid #e5e7eb', overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,0.25)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: '1px solid #e5e7eb', background: '#f8f7f4' }}>
-              <span style={{ fontWeight: 700, fontSize: 16, color: '#1a1a1a' }}>{isEditing ? 'Edit Booking' : 'Add Booking'}</span>
-              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 22, cursor: 'pointer' }}>×</button>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.80)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: '#12121a', borderRadius: 18, width: '100%', maxWidth: 660, border: '1px solid rgba(255,255,255,0.12)', maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 24px 80px rgba(0,0,0,0.6)' }}>
+
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+              <span style={{ fontWeight: 700, fontSize: 16, color: '#e8e8f0' }}>{isEditing ? '✏️ Edit Reservation' : '➕ Add Reservation'}</span>
+              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', color: '#5a5a7a', fontSize: 22, cursor: 'pointer' }}>×</button>
             </div>
-            <form onSubmit={handleFormSubmit} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14, background: '#ffffff' }}>
-              {[['Guest Name', pname, setPName, 'text'], ['Email', email, setEmail, 'email'], ['Phone', phone, setPhone, 'tel']].map(([label, val, setter, type]) => (
-                <div key={label}>
-                  <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>{label}</div>
-                  <input required type={type} value={val} onChange={e => setter(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', background: '#f8f7f4', border: '1.5px solid #e5e7eb', borderRadius: 8, padding: '10px 14px', fontSize: 13, fontFamily: "'DM Sans', sans-serif", color: '#1a1a1a', outline: 'none' }} />
-                </div>
-              ))}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                {[['Check-in', checkInDate, setCheckInDate], ['Check-out', checkOutDate, setCheckOutDate]].map(([label, val, setter]) => (
-                  <div key={label}>
-                    <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>{label}</div>
-                    <input required type="date" value={val ? new Date(val).toISOString().split('T')[0] : ''} onChange={e => setter(new Date(e.target.value))} style={{ width: '100%', boxSizing: 'border-box', background: '#f8f7f4', border: '1.5px solid #e5e7eb', borderRadius: 8, padding: '10px 14px', fontSize: 13, fontFamily: "'DM Sans', sans-serif", color: '#1a1a1a', outline: 'none' }} />
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>Room Type</div>
-                  <select required value={selectedRoomId} onChange={e => { const sel = rooms.find(r => r.id === e.target.value); setSelectedRoomId(sel?.id || ''); setSelectedRoomName(sel?.name || ''); setRoomNumber(''); }} style={{ width: '100%', background: '#f8f7f4', border: '1.5px solid #e5e7eb', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#1a1a1a', outline: 'none' }}>
-                    <option value="">Select Room</option>
-                    {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+
+            <form onSubmit={handleFormSubmit}>
+              <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+                {/* ── Personal Info ── */}
+                <SectionDivider label="👤 Personal Information" />
+                <FieldRow>
+                  <Field label="Guest Name *"><input style={mi} value={pname} onChange={e => setPName(e.target.value)} required placeholder="Full name" /></Field>
+                  <Field label="Phone *"><input style={mi} value={phone} onChange={e => setPhone(e.target.value)} required placeholder="+1 (xxx) xxx-xxxx" /></Field>
+                </FieldRow>
+                <Field label="Email *"><input style={mi} type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="guest@email.com" /></Field>
+                <Field label="Address"><input style={mi} value={address} onChange={e => setAddress(e.target.value)} placeholder="Street address" /></Field>
+                <FieldRow>
+                  <Field label="City"><input style={mi} value={city} onChange={e => setCity(e.target.value)} placeholder="City" /></Field>
+                  <Field label="Province / State"><input style={mi} value={province} onChange={e => setProvince(e.target.value)} placeholder="ON" /></Field>
+                </FieldRow>
+                <FieldRow>
+                  <Field label="Country"><input style={mi} value={country} onChange={e => setCountry(e.target.value)} placeholder="Canada" /></Field>
+                  <Field label="Postal / Zip Code"><input style={mi} value={postalCode} onChange={e => setPostalCode(e.target.value)} placeholder="L3K 5V4" /></Field>
+                </FieldRow>
+                <Field label="Company (optional)"><input style={mi} value={company} onChange={e => setCompany(e.target.value)} placeholder="Company name" /></Field>
+
+                {/* ── ID & Vehicle ── */}
+                <SectionDivider label="🪪 Identification & Vehicle" />
+                <FieldRow>
+                  <Field label="Driver's Licence No."><input style={mi} value={driverLicNo} onChange={e => setDriverLicNo(e.target.value)} placeholder="Licence number" /></Field>
+                  <Field label="Date of Birth"><input type="date" style={mi} value={dob} onChange={e => setDob(e.target.value)} /></Field>
+                </FieldRow>
+                <Field label="Vehicle Plate #"><input style={mi} value={plateNumber} onChange={e => setPlateNumber(e.target.value)} placeholder="ABC 1234" /></Field>
+
+                {/* ── Stay Details ── */}
+                <SectionDivider label="🛏️ Stay Details" />
+                <FieldRow>
+                  <Field label="Check-in *"><input type="date" style={mi} value={checkInDate ? new Date(checkInDate).toISOString().split('T')[0] : ''} onChange={e => setCheckInDate(new Date(e.target.value))} required /></Field>
+                  <Field label="Check-out *"><input type="date" style={mi} value={checkOutDate ? new Date(checkOutDate).toISOString().split('T')[0] : ''} onChange={e => setCheckOutDate(new Date(e.target.value))} required /></Field>
+                </FieldRow>
+                <FieldRow>
+                  <Field label="Room Type *">
+                    <select style={mi} value={selectedRoomId} onChange={e => { const sel = rooms.find(r => r.id === e.target.value); setSelectedRoomId(sel?.id || ''); setSelectedRoomName(sel?.name || ''); setRoomNumber(''); }} required>
+                      <option value="">Select Room</option>
+                      {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Room Number *">
+                    <select style={{ ...mi, opacity: !selectedRoomName ? 0.5 : 1 }} value={roomNumber} onChange={e => setRoomNumber(e.target.value)} required disabled={!selectedRoomName}>
+                      <option value="">{selectedRoomName ? 'Select Number' : '— pick room first —'}</option>
+                      {(ROOM_SLOTS[selectedRoomName] || []).map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </Field>
+                </FieldRow>
+                <FieldRow>
+                  <Field label="Adults *"><input type="number" min={1} style={mi} value={adults} onChange={e => setAdults(parseInt(e.target.value))} required /></Field>
+                  <Field label="Kids"><input type="number" min={0} style={mi} value={kids} onChange={e => setKids(parseInt(e.target.value))} /></Field>
+                </FieldRow>
+                <Field label="# of Rooms"><input type="number" min={1} max={10} style={{ ...mi, maxWidth: 120 }} value={numberOfRooms} onChange={e => setNumberOfRooms(e.target.value)} /></Field>
+
+                {/* ── Payment & Deposit ── */}
+                <SectionDivider label="💳 Payment & Deposit" />
+                <Field label="Method of Payment">
+                  <select style={mi} value={methodOfPayment} onChange={e => setMethodOfPayment(e.target.value)}>
+                    <option value="">Select method…</option>
+                    {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>Room Number</div>
-                  <select required value={roomNumber} onChange={e => setRoomNumber(e.target.value)} disabled={!selectedRoomName} style={{ width: '100%', background: '#f8f7f4', border: '1.5px solid #e5e7eb', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#1a1a1a', outline: 'none', opacity: !selectedRoomName ? 0.5 : 1 }}>
-                    <option value="">{selectedRoomName ? 'Select Number' : '— pick room first —'}</option>
-                    {(ROOM_SLOTS[selectedRoomName] || []).map(n => <option key={n} value={n}>{n}</option>)}
-                  </select>
-                </div>
+                </Field>
+                <FieldRow>
+                  <Field label="Deposit ($)"><input type="number" min={0} step="0.01" style={mi} value={deposit} onChange={e => setDeposit(e.target.value)} placeholder="0.00" /></Field>
+                  <Field label="Returned Deposit ($)"><input type="number" min={0} step="0.01" style={mi} value={returnedDeposit} onChange={e => setReturnedDeposit(e.target.value)} placeholder="0.00" /></Field>
+                </FieldRow>
+                <Field label="Clerk"><input style={mi} value={clerk} onChange={e => setClerk(e.target.value)} placeholder="Staff name" /></Field>
+
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                {[['Adults', adults, setAdults, 1], ['Kids', kids, setKids, 0]].map(([label, val, setter, min]) => (
-                  <div key={label}>
-                    <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>{label}</div>
-                    <input required type="number" min={min} value={val} onChange={e => setter(parseInt(e.target.value))} style={{ width: '100%', boxSizing: 'border-box', background: '#f8f7f4', border: '1.5px solid #e5e7eb', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#1a1a1a', outline: 'none' }} />
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
-                <button type="button" onClick={() => setShowModal(false)} style={{ padding: '9px 20px', borderRadius: 8, border: '1.5px solid #d1d5db', background: '#fff', color: '#374151', cursor: 'pointer', fontSize: 13, fontFamily: "'DM Sans', sans-serif" }}>Cancel</button>
-                <button type="submit" disabled={saving} style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: saving ? '#93c5fd' : '#2563eb', color: '#fff', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', fontSize: 13, fontFamily: "'DM Sans', sans-serif" }}>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+                <button type="button" onClick={() => setShowModal(false)} style={{ padding: '9px 20px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: '#1a1a28', color: '#9898b8', cursor: 'pointer', fontSize: 13, fontFamily: 'DM Sans, sans-serif' }}>Cancel</button>
+                <button type="submit" disabled={saving} style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: saving ? '#6b7280' : '#f0c060', color: '#0a0a0f', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', fontSize: 13, fontFamily: 'DM Sans, sans-serif' }}>
                   {saving ? 'Saving…' : isEditing ? 'Update' : 'Add Booking'}
                 </button>
               </div>
@@ -642,165 +693,161 @@ const AdminRecentReservations = () => {
         </div>
       )}
 
-      {/* ── Receipt Modal ── */}
+      {/* ════════════════════════════════════════════════════════
+          RECEIPT MODAL — matches physical form layout
+      ════════════════════════════════════════════════════════ */}
       {billModal && billDetails && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{
-            background: '#ffffff',
-            borderRadius: 16,
-            width: '100%',
-            maxWidth: 460,
-            border: '1px solid #e5e7eb',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            boxShadow: '0 24px 60px rgba(0,0,0,0.3)',
-            fontFamily: "'DM Sans', sans-serif",
-          }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.80)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: '#ffffff', borderRadius: 16, width: '100%', maxWidth: 520, border: '1px solid #e5e7eb', maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,0.3)', fontFamily: "'DM Sans', sans-serif" }}>
 
-            {/* ── Close button (outside printable area) ── */}
+            {/* Close */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px 0' }}>
-              <button
-                onClick={() => setBillModal(false)}
-                style={{ background: '#f1f0ed', border: '1px solid #e5e7eb', color: '#6b7280', width: 32, height: 32, borderRadius: 8, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}
-              >×</button>
+              <button onClick={() => setBillModal(false)} style={{ background: '#f1f0ed', border: '1px solid #e5e7eb', color: '#6b7280', width: 32, height: 32, borderRadius: 8, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>×</button>
             </div>
 
-            {/* ── Printable area — everything inside this div goes into the PDF ── */}
+            {/* ── Printable area ── */}
             <div id="receipt-printable" style={{ background: '#ffffff', padding: '0 0 4px' }}>
 
-              {/* Blue gradient header */}
-              <div style={{
-                background: 'linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)',
-                padding: '22px 24px',
-                color: '#fff',
-              }}>
+              {/* Header */}
+              <div style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)', padding: '22px 24px', color: '#fff' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ width: 40, height: 40, background: 'rgba(255,255,255,0.15)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🌙</div>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 15, letterSpacing: 0.3 }}>GoodNight Inn</div>
-                    <div style={{ fontSize: 10, opacity: 0.7, marginTop: 1 }}>HST# 833074875RT0001 · Port Colborne, ON</div>
+                    <div style={{ fontWeight: 700, fontSize: 17 }}>GoodNight Inn</div>
+                    <div style={{ fontSize: 10, opacity: 0.7 }}>664 Main St. West, Port Colborne, ON L3K5V4</div>
+                    <div style={{ fontSize: 10, opacity: 0.7 }}>905-835-1818 · www.goodnightinn.ca · manager@goodnightinn.ca</div>
                   </div>
                 </div>
-                <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.2)' }}>
-                  <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 }}>Guest Receipt</div>
-                  <div style={{ fontSize: 20, fontWeight: 700 }}>{billDetails.guest}</div>
-                  <div style={{ fontSize: 13, opacity: 0.8, marginTop: 2 }}>{billDetails.roomName} · Room {billDetails.roomNumber}</div>
+                <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                  <div>
+                    <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 }}>Guest Registration Receipt</div>
+                    <div style={{ fontSize: 18, fontWeight: 700 }}>{billDetails.guest}</div>
+                    {billDetails.company && <div style={{ fontSize: 12, opacity: 0.8 }}>{billDetails.company}</div>}
+                  </div>
+                  <div style={{ textAlign: 'right', fontSize: 11, opacity: 0.75 }}>
+                    <div>HST# 833074875RT0001</div>
+                    {billDetails.clerk && <div>Clerk: {billDetails.clerk}</div>}
+                  </div>
                 </div>
               </div>
 
-              <div style={{ padding: '20px 24px' }}>
+              <div style={{ padding: '18px 24px' }}>
 
-                {/* Stay info cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
+                {/* ── Grid 1: Stay Info ── */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
                   {[
-                    ['Check-in',   billDetails.checkIn],
-                    ['Check-out',  billDetails.checkOut],
-                    ['Nights',     String(billDetails.nights)],
-                    ['Rate/Night', `$${billDetails.roomPrice.toFixed(2)}`],
+                    ['Room Type',    billDetails.roomName],
+                    ['Room No.',     billDetails.roomNumber],
+                    ['# of Rooms',   String(billDetails.numberOfRooms || 1)],
+                    ['Check-in',     billDetails.checkIn],
+                    ['Check-out',    billDetails.checkOut],
+                    ['Nights',       String(billDetails.nights)],
+                    ['Adults',       String(billDetails.adults || '')],
+                    ['Kids',         String(billDetails.kids || 0)],
+                    ['Rate/Night',   `$${billDetails.roomPrice.toFixed(2)}`],
                   ].map(([label, val]) => (
-                    <div key={label} style={{ background: '#f8f7f4', borderRadius: 10, padding: '12px 14px', border: '1px solid #e5e7eb' }}>
-                      <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{label}</div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a' }}>{val}</div>
+                    <div key={label} style={{ background: '#f8f7f4', borderRadius: 8, padding: '10px 12px', border: '1px solid #e5e7eb' }}>
+                      <div style={{ fontSize: 9, color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3 }}>{label}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>{val || '—'}</div>
                     </div>
                   ))}
                 </div>
 
-                {/* Billing breakdown */}
-                <div style={{ borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden', marginBottom: 20 }}>
-                  <div style={{ background: '#f8f7f4', padding: '9px 16px', borderBottom: '1px solid #e5e7eb' }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#6b7280' }}>Billing Summary</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid #f3f4f6', background: '#fff' }}>
-                    <span style={{ fontSize: 13, color: '#374151' }}>
-                      Room Total <span style={{ fontSize: 11, color: '#9ca3af' }}>({billDetails.nights} night{billDetails.nights !== 1 ? 's' : ''} x ${billDetails.roomPrice.toFixed(2)})</span>
-                    </span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>${billDetails.roomTotal.toFixed(2)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid #f3f4f6', background: '#fefefe' }}>
-                    <span style={{ fontSize: 13, color: '#374151' }}>Accommodation Tax <span style={{ fontSize: 11, color: '#9ca3af' }}>(4%)</span></span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>${billDetails.accomTax.toFixed(2)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid #dbeafe', background: '#eff6ff' }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1e3a5f' }}>Sub Total</span>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: '#1e3a5f' }}>${billDetails.subTotal.toFixed(2)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid #e5e7eb', background: '#fefefe' }}>
-                    <span style={{ fontSize: 13, color: '#374151' }}>HST <span style={{ fontSize: 11, color: '#9ca3af' }}>(13%)</span></span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>${billDetails.hstAmount.toFixed(2)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: 'linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)' }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Total (CAD)</div>
-                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 2 }}>All taxes included</div>
-                    </div>
-                    <div style={{ fontSize: 30, fontWeight: 800, color: '#fff', fontFamily: 'monospace', letterSpacing: -1 }}>
-                      ${billDetails.totalAmount.toFixed(2)}
-                    </div>
+                {/* ── Guest Details ── */}
+                <div style={{ background: '#f8f7f4', borderRadius: 10, border: '1px solid #e5e7eb', padding: '14px 16px', marginBottom: 16 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#6b7280', marginBottom: 10 }}>Guest Details</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px', fontSize: 12 }}>
+                    {[
+                      ['Phone',          billDetails.phone],
+                      ['Email',          billDetails.email],
+                      ['Address',        [billDetails.address, billDetails.city, billDetails.province, billDetails.postalCode, billDetails.country].filter(Boolean).join(', ')],
+                      ['Driver Lic No.', billDetails.driverLicNo],
+                      ['Date of Birth',  billDetails.dob],
+                      ['Plate #',        billDetails.plateNumber],
+                    ].map(([label, val]) => val ? (
+                      <div key={label}>
+                        <span style={{ color: '#9ca3af', fontWeight: 600 }}>{label}: </span>
+                        <span style={{ color: '#374151' }}>{val}</span>
+                      </div>
+                    ) : null)}
                   </div>
                 </div>
 
-                {/* Footer inside printable area */}
-                <div style={{ textAlign: 'center', fontSize: 11, color: '#9ca3af', lineHeight: 1.6 }}>
-                  664 Main St. W, Port Colborne, ON L3K 5V4{'\n'}
-                  1-833-855-1818 · manager@goodnightinn.ca
+                {/* ── Notice to Guests ── */}
+                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 11, color: '#92400e', lineHeight: 1.6 }}>
+                  <strong>Notice to Guests:</strong> This property is owned, and management reserves the right to refuse service to anyone and will not be responsible for accidents or injury to our guests or loss of money, jewellery or valuable of any kind. We reserve the right to evict any persons being neglect or mishandling hotel property or any boisterous behaviour. Any items inadvertently misused or removed will be billed to your account. It is also understood that you are responsible for any charges incurred during your stay and for those who are realized after your departure.
+                </div>
+
+                {/* ── Billing Summary ── */}
+                <div style={{ borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden', marginBottom: 16 }}>
+                  <div style={{ background: '#f8f7f4', padding: '9px 16px', borderBottom: '1px solid #e5e7eb' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#6b7280' }}>Billing Summary</span>
+                  </div>
+                  {[
+                    [`Room Total (${billDetails.nights} × $${billDetails.roomPrice.toFixed(2)})`, `$${billDetails.roomTotal.toFixed(2)}`],
+                    ['Accommodation Tax (4%)', `$${billDetails.accomTax.toFixed(2)}`],
+                  ].map(([label, val]) => (
+                    <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid #f3f4f6', background: '#fff' }}>
+                      <span style={{ fontSize: 13, color: '#374151' }}>{label}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>{val}</span>
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid #dbeafe', background: '#eff6ff' }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1e3a5f' }}>Sub Total</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: '#1e3a5f' }}>${billDetails.subTotal.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid #e5e7eb', background: '#fff' }}>
+                    <span style={{ fontSize: 13, color: '#374151' }}>HST (13%)</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>${billDetails.hstAmount.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px', background: 'linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)' }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Total (CAD)</div>
+                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)' }}>All taxes included</div>
+                    </div>
+                    <div style={{ fontSize: 30, fontWeight: 800, color: '#fff', fontFamily: 'monospace' }}>${billDetails.totalAmount.toFixed(2)}</div>
+                  </div>
+
+                  {/* Deposit row */}
+                  {(billDetails.deposit || billDetails.returnedDeposit) && (
+                    <div style={{ background: '#f8f7f4', padding: '10px 16px', display: 'flex', gap: 24 }}>
+                      {billDetails.deposit != null && (
+                        <div><span style={{ fontSize: 11, color: '#6b7280' }}>Deposit: </span><span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>${Number(billDetails.deposit).toFixed(2)}</span></div>
+                      )}
+                      {billDetails.returnedDeposit != null && (
+                        <div><span style={{ fontSize: 11, color: '#6b7280' }}>Returned: </span><span style={{ fontSize: 13, fontWeight: 600, color: '#16a34a' }}>${Number(billDetails.returnedDeposit).toFixed(2)}</span></div>
+                      )}
+                      {billDetails.methodOfPayment && (
+                        <div><span style={{ fontSize: 11, color: '#6b7280' }}>Payment: </span><span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>{billDetails.methodOfPayment}</span></div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Signature ── */}
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, paddingTop: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 4 }}>Guest's Signature</div>
+                    <div style={{ borderBottom: '1px solid #d1d5db', height: 32 }} />
+                  </div>
+                  <div style={{ textAlign: 'center', fontSize: 10, color: '#9ca3af', lineHeight: 1.6 }}>
+                    664 Main St. W, Port Colborne, ON L3K 5V4<br />
+                    905-835-1818 · manager@goodnightinn.ca
+                  </div>
                 </div>
               </div>
             </div>
             {/* ── End printable area ── */}
 
-            {/* ── Action buttons (NOT captured in PDF) ── */}
+            {/* Actions */}
             <div style={{ display: 'flex', gap: 8, padding: '14px 24px 20px', borderTop: '1px solid #e5e7eb', flexWrap: 'wrap' }}>
-
-              {/* Download PDF */}
-              <button
-                onClick={handleDownloadPdf}
-                disabled={generatingPdf}
-                style={{
-                  flex: 1,
-                  padding: '11px 14px',
-                  borderRadius: 10,
-                  border: '1.5px solid #d1d5db',
-                  background: generatingPdf ? '#f1f0ed' : '#f8f7f4',
-                  color: generatingPdf ? '#9ca3af' : '#374151',
-                  cursor: generatingPdf ? 'not-allowed' : 'pointer',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  fontFamily: "'DM Sans', sans-serif",
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  transition: 'all 0.2s',
-                }}
-              >
+              <button onClick={handleDownloadPdf} disabled={generatingPdf} style={{ flex: 1, padding: '11px 14px', borderRadius: 10, border: '1.5px solid #d1d5db', background: generatingPdf ? '#f1f0ed' : '#f8f7f4', color: generatingPdf ? '#9ca3af' : '#374151', cursor: generatingPdf ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                 {generatingPdf ? '⏳ Generating…' : '⬇ Download PDF'}
               </button>
-
-              {/* Email Receipt */}
-              <button
-                onClick={sendBill}
-                disabled={sendingEmail}
-                style={{
-                  flex: 2,
-                  padding: '11px 14px',
-                  borderRadius: 10,
-                  border: 'none',
-                  background: sendingEmail ? '#93c5fd' : '#2563eb',
-                  color: '#fff',
-                  fontWeight: 700,
-                  cursor: sendingEmail ? 'not-allowed' : 'pointer',
-                  fontSize: 13,
-                  fontFamily: "'DM Sans', sans-serif",
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                }}
-              >
+              <button onClick={sendBill} disabled={sendingEmail} style={{ flex: 2, padding: '11px 14px', borderRadius: 10, border: 'none', background: sendingEmail ? '#93c5fd' : '#2563eb', color: '#fff', fontWeight: 700, cursor: sendingEmail ? 'not-allowed' : 'pointer', fontSize: 13, fontFamily: "'DM Sans', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                 {sendingEmail ? '⏳ Sending…' : '📧 Email Receipt to Guest'}
               </button>
             </div>
-
           </div>
         </div>
       )}

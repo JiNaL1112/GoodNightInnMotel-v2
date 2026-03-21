@@ -5,7 +5,6 @@ import { imageData } from '../data';
 
 export const RoomContext = createContext();
 
-// Room slots — used to auto-assign a room number when the guest doesn't pick one
 const ROOM_SLOTS = {
   'Queen Bed':      [101, 102, 103, 104, 105],
   'Two Queen Beds': [201, 202, 203, 204, 205],
@@ -17,7 +16,7 @@ const RoomProvider = ({ children }) => {
   const [rooms,            setRooms]            = useState([]);
   const [loading,          setLoading]          = useState(false);
 
-  // Booking form fields
+  // ── Core booking fields ────────────────────────────────────────────────────
   const [pname,            setPName]            = useState('');
   const [email,            setEmail]            = useState('');
   const [phone,            setPhone]            = useState('');
@@ -27,12 +26,26 @@ const RoomProvider = ({ children }) => {
   const [kids,             setKids]             = useState('0 Kids');
   const [selectedRoomId,   setSelectedRoomId]   = useState('');
   const [selectedRoomName, setSelectedRoomName] = useState('');
-  // ── NEW: roomNumber is now tracked in context so it saves correctly ──────────
   const [roomNumber,       setRoomNumber]       = useState('');
+
+  // ── Extended registration fields (matching physical form) ─────────────────
+  const [address,          setAddress]          = useState('');
+  const [city,             setCity]             = useState('');
+  const [province,         setProvince]         = useState('');
+  const [country,          setCountry]          = useState('');
+  const [postalCode,       setPostalCode]       = useState('');
+  const [company,          setCompany]          = useState('');
+  const [driverLicNo,      setDriverLicNo]      = useState('');
+  const [dob,              setDob]              = useState('');
+  const [deposit,          setDeposit]          = useState('');
+  const [returnedDeposit,  setReturnedDeposit]  = useState('');
+  const [methodOfPayment,  setMethodOfPayment]  = useState('');
+  const [plateNumber,      setPlateNumber]      = useState('');
+  const [clerk,            setClerk]            = useState('');
+  const [numberOfRooms,    setNumberOfRooms]    = useState(1);
 
   const images = imageData;
 
-  // ── Fetch rooms from Firestore ─────────────────────────────────────────────
   const fetchRooms = async () => {
     setLoading(true);
     try {
@@ -46,11 +59,9 @@ const RoomProvider = ({ children }) => {
     }
   };
 
-  // ── Filter rooms by guest count (used on public search bar) ───────────────
   const handleClick = (e) => {
     e.preventDefault();
     setLoading(true);
-    // Parse "2 Adults" → 2, "1 Kid" → 1, etc.
     const numAdults = parseInt(adults) || 1;
     const numKids   = parseInt(kids)   || 0;
     const total     = numAdults + numKids;
@@ -61,12 +72,21 @@ const RoomProvider = ({ children }) => {
     }, 3000);
   };
 
-  // ── Submit public reservation request ─────────────────────────────────────
-  // FIX: now saves roomNumber + status:'pending' so admin room grid works correctly
+  // ── Reset all form fields ──────────────────────────────────────────────────
+  const resetForm = () => {
+    setPName('');           setEmail('');            setPhone('');
+    setCheckInDate(null);   setCheckOutDate(null);
+    setAdults('1 Adult');   setKids('0 Kids');
+    setSelectedRoomId('');  setSelectedRoomName(''); setRoomNumber('');
+    setAddress('');         setCity('');             setProvince('');
+    setCountry('');         setPostalCode('');       setCompany('');
+    setDriverLicNo('');     setDob('');              setDeposit('');
+    setReturnedDeposit(''); setMethodOfPayment('');  setPlateNumber('');
+    setClerk('');           setNumberOfRooms(1);
+  };
+
   const handleReservation = async () => {
     try {
-      // If guest didn't pick a specific room number, auto-assign the first slot
-      // for their chosen room type (admin can reassign later)
       const assignedRoomNumber =
         roomNumber ||
         (selectedRoomName && ROOM_SLOTS[selectedRoomName]
@@ -74,6 +94,7 @@ const RoomProvider = ({ children }) => {
           : null);
 
       await addDoc(collection(db, 'reservations'), {
+        // Core fields
         pname,
         email,
         phone,
@@ -83,24 +104,29 @@ const RoomProvider = ({ children }) => {
         kids,
         roomId:     selectedRoomId,
         roomName:   selectedRoomName,
-        roomNumber: assignedRoomNumber,   // ← FIXED: was missing before
-        status:     'pending',            // ← FIXED: was missing before
+        roomNumber: assignedRoomNumber,
+        status:     'pending',
         createdAt:  new Date(),
+
+        // Extended registration fields
+        address,
+        city,
+        province,
+        country,
+        postalCode,
+        company,
+        driverLicNo,
+        dob,
+        deposit:         deposit        ? Number(deposit)        : null,
+        returnedDeposit: returnedDeposit ? Number(returnedDeposit) : null,
+        methodOfPayment,
+        plateNumber,
+        clerk,
+        numberOfRooms:   Number(numberOfRooms) || 1,
       });
 
       alert('Reservation request sent! Our admin will connect with you shortly to confirm your reservation.');
-
-      // Reset form fields
-      setPName('');
-      setEmail('');
-      setPhone('');
-      setCheckInDate(null);
-      setCheckOutDate(null);
-      setAdults('1 Adult');
-      setKids('0 Kids');
-      setSelectedRoomId('');
-      setSelectedRoomName('');
-      setRoomNumber('');
+      resetForm();
     } catch (error) {
       console.error('Reservation error:', error);
       alert('Failed to send reservation request. Please try again.');
@@ -118,7 +144,7 @@ const RoomProvider = ({ children }) => {
         loading,
         images,
 
-        // Booking form state
+        // Core booking state
         pname,            setPName,
         email,            setEmail,
         phone,            setPhone,
@@ -128,12 +154,29 @@ const RoomProvider = ({ children }) => {
         kids,             setKids,
         selectedRoomId,   setSelectedRoomId,
         selectedRoomName, setSelectedRoomName,
-        roomNumber,       setRoomNumber,   // ← NEW: exposed so forms can set it
+        roomNumber,       setRoomNumber,
+
+        // Extended registration state
+        address,          setAddress,
+        city,             setCity,
+        province,         setProvince,
+        country,          setCountry,
+        postalCode,       setPostalCode,
+        company,          setCompany,
+        driverLicNo,      setDriverLicNo,
+        dob,              setDob,
+        deposit,          setDeposit,
+        returnedDeposit,  setReturnedDeposit,
+        methodOfPayment,  setMethodOfPayment,
+        plateNumber,      setPlateNumber,
+        clerk,            setClerk,
+        numberOfRooms,    setNumberOfRooms,
 
         // Actions
         handleClick,
         handleReservation,
         fetchRooms,
+        resetForm,
       }}
     >
       {children}

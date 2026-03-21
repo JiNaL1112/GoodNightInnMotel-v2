@@ -27,6 +27,8 @@ const rules = [
   'No Smoking',
 ];
 
+const PAYMENT_METHODS = ['Cash', 'Credit Card', 'Debit Card', 'E-Transfer', 'Other'];
+
 const RoomDetails = () => {
   const {
     pname, setPName,
@@ -40,6 +42,21 @@ const RoomDetails = () => {
     rooms,
     setSelectedRoomId,
     setSelectedRoomName,
+
+    // Extended fields
+    address,         setAddress,
+    city,            setCity,
+    province,        setProvince,
+    country,         setCountry,
+    postalCode,      setPostalCode,
+    company,         setCompany,
+    driverLicNo,     setDriverLicNo,
+    dob,             setDob,
+    deposit,         setDeposit,
+    returnedDeposit, setReturnedDeposit,
+    methodOfPayment, setMethodOfPayment,
+    plateNumber,     setPlateNumber,
+    numberOfRooms,   setNumberOfRooms,
   } = useContext(RoomContext);
 
   const { id } = useParams();
@@ -66,8 +83,6 @@ const RoomDetails = () => {
   }
 
   const { name, description, imageData, price } = room;
-
-  // Match local asset images from data.js by name
   const localRoom = roomData.find((r) => r.name === name) || roomData[0];
   const roomImage = imageData || localRoom?.imageLg || localRoom?.image || null;
 
@@ -75,7 +90,6 @@ const RoomDetails = () => {
     <section>
       <ScrollToTop />
 
-      {/* Banner */}
       <div className="bg-room bg-cover bg-center h-[560px] relative flex justify-center items-center">
         <div className="absolute w-full h-full bg-black/70" />
         <h1 className="text-6xl text-white z-20 font-primary text-center">{name} Details</h1>
@@ -87,21 +101,18 @@ const RoomDetails = () => {
           {/* ── LEFT COLUMN ── */}
           <div style={leftColStyle}>
 
-            {/* Room title + description */}
             <div style={{ marginBottom: '28px' }}>
               <span className="section-tag">Accommodation</span>
               <h2 style={roomTitleStyle}>{name}</h2>
               <p style={roomDescStyle}>{description}</p>
             </div>
 
-            {/* Room image */}
             {roomImage && (
               <div style={imgWrapStyle}>
                 <img src={roomImage} alt={name} style={imgStyle} />
               </div>
             )}
 
-            {/* ── FACILITIES ── */}
             <div style={{ marginTop: '44px' }}>
               <span className="section-tag">What's Included</span>
               <h3 style={sectionHeadStyle}>
@@ -133,7 +144,6 @@ const RoomDetails = () => {
             {/* ── BOOKING FORM ── */}
             <div style={formCardStyle}>
 
-              {/* Form header */}
               <div style={formHeaderStyle}>
                 <div>
                   <div style={formBadgeStyle}>Reserve Your Stay</div>
@@ -145,66 +155,144 @@ const RoomDetails = () => {
                 <div style={formRatingStyle}>⭐ 4.9</div>
               </div>
 
-              {/* Divider */}
               <div style={formDividerStyle} />
 
-              {/* Fields */}
               <div style={formBodyStyle}>
 
+                {/* ── Section: Personal Info ── */}
+                <div style={sectionLabelStyle}>👤 Personal Information</div>
+
                 <div style={fieldGroupStyle}>
-                  <label style={labelStyle}>Full Name</label>
-                  <input
-                    type="text"
-                    placeholder="Your name"
-                    value={pname}
-                    onChange={(e) => setPName(e.target.value)}
-                    style={inputStyle}
-                  />
+                  <label style={labelStyle}>Full Name *</label>
+                  <input type="text" placeholder="Your name" value={pname}
+                    onChange={(e) => setPName(e.target.value)} style={inputStyle} />
+                </div>
+
+                <div style={twoColStyle}>
+                  <div style={fieldGroupStyle}>
+                    <label style={labelStyle}>Email *</label>
+                    <input type="email" placeholder="you@example.com" value={email}
+                      onChange={(e) => setEmail(e.target.value)} style={inputStyle} />
+                  </div>
+                  <div style={fieldGroupStyle}>
+                    <label style={labelStyle}>Phone *</label>
+                    <input type="tel" placeholder="+1 (000) 000-0000" value={phone}
+                      onChange={(e) => setPhone(e.target.value)} style={inputStyle} />
+                  </div>
                 </div>
 
                 <div style={fieldGroupStyle}>
-                  <label style={labelStyle}>Email Address</label>
-                  <input
-                    type="email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    style={inputStyle}
-                  />
+                  <label style={labelStyle}>Address</label>
+                  <input type="text" placeholder="Street address" value={address}
+                    onChange={(e) => setAddress(e.target.value)} style={inputStyle} />
+                </div>
+
+                <div style={twoColStyle}>
+                  <div style={fieldGroupStyle}>
+                    <label style={labelStyle}>City</label>
+                    <input type="text" placeholder="City" value={city}
+                      onChange={(e) => setCity(e.target.value)} style={inputStyle} />
+                  </div>
+                  <div style={fieldGroupStyle}>
+                    <label style={labelStyle}>Province / State</label>
+                    <input type="text" placeholder="ON" value={province}
+                      onChange={(e) => setProvince(e.target.value)} style={inputStyle} />
+                  </div>
+                </div>
+
+                <div style={twoColStyle}>
+                  <div style={fieldGroupStyle}>
+                    <label style={labelStyle}>Country</label>
+                    <input type="text" placeholder="Canada" value={country}
+                      onChange={(e) => setCountry(e.target.value)} style={inputStyle} />
+                  </div>
+                  <div style={fieldGroupStyle}>
+                    <label style={labelStyle}>Postal / Zip Code</label>
+                    <input type="text" placeholder="L3K 5V4" value={postalCode}
+                      onChange={(e) => setPostalCode(e.target.value)} style={inputStyle} />
+                  </div>
                 </div>
 
                 <div style={fieldGroupStyle}>
-                  <label style={labelStyle}>Phone Number</label>
-                  <input
-                    type="tel"
-                    placeholder="+1 (000) 000-0000"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    style={inputStyle}
-                  />
+                  <label style={labelStyle}>Company (optional)</label>
+                  <input type="text" placeholder="Company name" value={company}
+                    onChange={(e) => setCompany(e.target.value)} style={inputStyle} />
                 </div>
 
-                {/* Date row — uses overflow:hidden (date pickers use a portal, safe) */}
-                <div style={dateRowStyle}>
-                  <div style={{ flex: 1 }}>
+                {/* ── Section: ID & Vehicle ── */}
+                <div style={{ ...sectionLabelStyle, marginTop: '8px' }}>🪪 Identification & Vehicle</div>
+
+                <div style={twoColStyle}>
+                  <div style={fieldGroupStyle}>
+                    <label style={labelStyle}>Driver's Licence No.</label>
+                    <input type="text" placeholder="Licence number" value={driverLicNo}
+                      onChange={(e) => setDriverLicNo(e.target.value)} style={inputStyle} />
+                  </div>
+                  <div style={fieldGroupStyle}>
+                    <label style={labelStyle}>Date of Birth</label>
+                    <input type="date" value={dob}
+                      onChange={(e) => setDob(e.target.value)} style={inputStyle} />
+                  </div>
+                </div>
+
+                <div style={fieldGroupStyle}>
+                  <label style={labelStyle}>Vehicle Plate #</label>
+                  <input type="text" placeholder="ABC 1234" value={plateNumber}
+                    onChange={(e) => setPlateNumber(e.target.value)} style={inputStyle} />
+                </div>
+
+                {/* ── Section: Stay Details ── */}
+                <div style={{ ...sectionLabelStyle, marginTop: '8px' }}>🛏️ Stay Details</div>
+
+                <div style={twoColStyle}>
+                  <div style={fieldGroupStyle}>
                     <label style={labelStyle}>Check In</label>
                     <div style={datePickerWrapStyle}><CheckIn /></div>
                   </div>
-                  <div style={{ flex: 1 }}>
+                  <div style={fieldGroupStyle}>
                     <label style={labelStyle}>Check Out</label>
                     <div style={datePickerWrapStyle}><CheckOut /></div>
                   </div>
                 </div>
 
-                {/* Guests row — uses overflow:visible so Headless UI menus can render */}
-                <div style={dateRowStyle}>
-                  <div style={{ flex: 1 }}>
+                <div style={twoColStyle}>
+                  <div style={fieldGroupStyle}>
                     <label style={labelStyle}>Adults</label>
                     <div style={dropdownWrapStyle}><AdultsDropdown /></div>
                   </div>
-                  <div style={{ flex: 1 }}>
+                  <div style={fieldGroupStyle}>
                     <label style={labelStyle}>Kids</label>
                     <div style={dropdownWrapStyle}><KidsDropdown /></div>
+                  </div>
+                </div>
+
+                <div style={fieldGroupStyle}>
+                  <label style={labelStyle}># of Rooms</label>
+                  <input type="number" min={1} max={10} value={numberOfRooms}
+                    onChange={(e) => setNumberOfRooms(e.target.value)} style={{ ...inputStyle, maxWidth: '120px' }} />
+                </div>
+
+                {/* ── Section: Payment ── */}
+                <div style={{ ...sectionLabelStyle, marginTop: '8px' }}>💳 Payment & Deposit</div>
+
+                <div style={fieldGroupStyle}>
+                  <label style={labelStyle}>Method of Payment</label>
+                  <select value={methodOfPayment} onChange={(e) => setMethodOfPayment(e.target.value)} style={selectStyle}>
+                    <option value="">Select method…</option>
+                    {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </div>
+
+                <div style={twoColStyle}>
+                  <div style={fieldGroupStyle}>
+                    <label style={labelStyle}>Deposit ($)</label>
+                    <input type="number" min={0} step="0.01" placeholder="0.00" value={deposit}
+                      onChange={(e) => setDeposit(e.target.value)} style={inputStyle} />
+                  </div>
+                  <div style={fieldGroupStyle}>
+                    <label style={labelStyle}>Returned Deposit ($)</label>
+                    <input type="number" min={0} step="0.01" placeholder="0.00" value={returnedDeposit}
+                      onChange={(e) => setReturnedDeposit(e.target.value)} style={inputStyle} />
                   </div>
                 </div>
 
@@ -220,7 +308,6 @@ const RoomDetails = () => {
                 </a>
               </div>
 
-              {/* Trust pills */}
               <div style={trustRowStyle}>
                 {['Free Cancellation', 'No Hidden Fees', 'Instant Confirm'].map(t => (
                   <span key={t} style={trustPillStyle}>✓ {t}</span>
@@ -247,313 +334,75 @@ const RoomDetails = () => {
         </div>
       </div>
 
-      {/* Inline hover styles for facility cards */}
       <style>{`
-        .facility-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        }
+        .facility-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
         @media (max-width: 768px) {
-          .room-details-layout {
-            flex-direction: column !important;
-          }
-          .room-details-right {
-            position: static !important;
-            min-width: 0 !important;
-          }
+          .room-details-layout { flex-direction: column !important; }
+          .room-details-right  { position: static !important; min-width: 0 !important; }
+          .two-col-field       { grid-template-columns: 1fr !important; }
         }
       `}</style>
     </section>
   );
 };
 
-/* ─────────────────────────────────────────
-   STYLES
-───────────────────────────────────────── */
+/* ─── Styles ─── */
+const layoutStyle       = { display: 'flex', flexDirection: 'row', gap: '48px', padding: '72px 24px', alignItems: 'flex-start' };
+const leftColStyle      = { flex: '1 1 55%', minWidth: 0 };
+const rightColStyle     = { flex: '1 1 40%', minWidth: '320px', display: 'flex', flexDirection: 'column', gap: '24px', position: 'sticky', top: '88px' };
+const roomTitleStyle    = { fontFamily: 'var(--font-disp)', fontSize: 'clamp(28px, 4vw, 42px)', fontWeight: '500', color: 'var(--text)', lineHeight: '1.2', margin: '8px 0 12px' };
+const roomDescStyle     = { fontSize: '15px', color: 'var(--text-muted)', lineHeight: '1.8' };
+const imgWrapStyle      = { borderRadius: 'var(--radius-lg)', overflow: 'hidden', boxShadow: 'var(--shadow-md)' };
+const imgStyle          = { width: '100%', display: 'block', objectFit: 'cover' };
+const sectionHeadStyle  = { fontFamily: 'var(--font-disp)', fontSize: '24px', fontWeight: '500', color: 'var(--text)', margin: '8px 0 20px' };
+const facilitiesGridStyle = { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' };
+const facilityCardStyle = { borderRadius: 'var(--radius)', padding: '16px 14px', display: 'flex', alignItems: 'center', gap: '12px', transition: 'transform 0.2s, box-shadow 0.2s', cursor: 'default' };
+const facilityIconWrapStyle = { fontSize: '20px', flexShrink: 0, width: '36px', height: '36px', background: 'rgba(255,255,255,0.7)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+const facilityNameStyle = { fontSize: '13px', fontWeight: '600', color: 'var(--text)', lineHeight: '1.3' };
 
-const layoutStyle = {
-  display: 'flex',
-  flexDirection: 'row',
-  gap: '48px',
-  padding: '72px 24px',
-  alignItems: 'flex-start',
+const formCardStyle     = { background: 'var(--bg-white)', borderRadius: 'var(--radius-lg)', border: '1.5px solid var(--border)', boxShadow: 'var(--shadow-md)', overflow: 'visible' };
+const formHeaderStyle   = { background: 'var(--blue)', padding: '22px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0' };
+const formBadgeStyle    = { fontSize: '11px', fontWeight: '700', letterSpacing: '2px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', marginBottom: '6px' };
+const formPriceRowStyle = { display: 'flex', alignItems: 'baseline', gap: '4px' };
+const formPriceStyle    = { fontFamily: 'var(--font-disp)', fontSize: '32px', fontWeight: '500', color: '#fff' };
+const formPricePerStyle = { fontSize: '13px', color: 'rgba(255,255,255,0.65)' };
+const formRatingStyle   = { background: 'rgba(255,255,255,0.15)', color: '#fff', padding: '6px 14px', borderRadius: '100px', fontSize: '13px', fontWeight: '600' };
+const formDividerStyle  = { height: '1px', background: 'var(--border)' };
+const formBodyStyle     = { padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: '12px' };
+
+const sectionLabelStyle = {
+  fontSize: '11px', fontWeight: '700', letterSpacing: '2px',
+  textTransform: 'uppercase', color: 'var(--blue)',
+  paddingBottom: '8px', borderBottom: '1px solid var(--border)',
+  marginBottom: '4px',
 };
 
-const leftColStyle = {
-  flex: '1 1 55%',
-  minWidth: 0,
-};
-
-const rightColStyle = {
-  flex: '1 1 40%',
-  minWidth: '320px',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '24px',
-  position: 'sticky',
-  top: '88px',
-};
-
-/* Room info */
-const roomTitleStyle = {
-  fontFamily: 'var(--font-disp)',
-  fontSize: 'clamp(28px, 4vw, 42px)',
-  fontWeight: '500',
-  color: 'var(--text)',
-  lineHeight: '1.2',
-  margin: '8px 0 12px',
-};
-
-const roomDescStyle = {
-  fontSize: '15px',
-  color: 'var(--text-muted)',
-  lineHeight: '1.8',
-};
-
-const imgWrapStyle = {
-  borderRadius: 'var(--radius-lg)',
-  overflow: 'hidden',
-  boxShadow: 'var(--shadow-md)',
-};
-
-const imgStyle = {
-  width: '100%',
-  display: 'block',
-  objectFit: 'cover',
-};
-
-const sectionHeadStyle = {
-  fontFamily: 'var(--font-disp)',
-  fontSize: '24px',
-  fontWeight: '500',
-  color: 'var(--text)',
-  margin: '8px 0 20px',
-};
-
-/* Facilities */
-const facilitiesGridStyle = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(3, 1fr)',
-  gap: '12px',
-};
-
-const facilityCardStyle = {
-  borderRadius: 'var(--radius)',
-  padding: '16px 14px',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '12px',
-  transition: 'transform 0.2s, box-shadow 0.2s',
-  cursor: 'default',
-};
-
-const facilityIconWrapStyle = {
-  fontSize: '20px',
-  flexShrink: 0,
-  width: '36px',
-  height: '36px',
-  background: 'rgba(255,255,255,0.7)',
-  borderRadius: '8px',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-};
-
-const facilityNameStyle = {
-  fontSize: '13px',
-  fontWeight: '600',
-  color: 'var(--text)',
-  lineHeight: '1.3',
-};
-
-/* Form card */
-const formCardStyle = {
-  background: 'var(--bg-white)',
-  borderRadius: 'var(--radius-lg)',
-  border: '1.5px solid var(--border)',
-  boxShadow: 'var(--shadow-md)',
-  overflow: 'visible', // must be visible so dropdowns inside can overflow
-};
-
-const formHeaderStyle = {
-  background: 'var(--blue)',
-  padding: '22px 24px',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0',
-};
-
-const formBadgeStyle = {
-  fontSize: '11px',
-  fontWeight: '700',
-  letterSpacing: '2px',
-  textTransform: 'uppercase',
-  color: 'rgba(255,255,255,0.7)',
-  marginBottom: '6px',
-};
-
-const formPriceRowStyle = {
-  display: 'flex',
-  alignItems: 'baseline',
-  gap: '4px',
-};
-
-const formPriceStyle = {
-  fontFamily: 'var(--font-disp)',
-  fontSize: '32px',
-  fontWeight: '500',
-  color: '#fff',
-};
-
-const formPricePerStyle = {
-  fontSize: '13px',
-  color: 'rgba(255,255,255,0.65)',
-};
-
-const formRatingStyle = {
-  background: 'rgba(255,255,255,0.15)',
-  color: '#fff',
-  padding: '6px 14px',
-  borderRadius: '100px',
-  fontSize: '13px',
-  fontWeight: '600',
-};
-
-const formDividerStyle = {
-  height: '1px',
-  background: 'var(--border)',
-};
-
-const formBodyStyle = {
-  padding: '22px 24px',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '14px',
-};
-
-const fieldGroupStyle = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '5px',
-};
-
-const labelStyle = {
-  fontSize: '11px',
-  fontWeight: '700',
-  letterSpacing: '1.5px',
-  textTransform: 'uppercase',
-  color: 'var(--text-muted)',
-};
+const fieldGroupStyle   = { display: 'flex', flexDirection: 'column', gap: '5px' };
+const twoColStyle       = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', className: 'two-col-field' };
+const labelStyle        = { fontSize: '11px', fontWeight: '700', letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text-muted)' };
 
 const inputStyle = {
-  border: '1.5px solid var(--border)',
-  borderRadius: 'var(--radius)',
-  padding: '10px 14px',
-  fontSize: '14px',
-  fontFamily: 'var(--font-body)',
-  color: 'var(--text)',
-  background: 'var(--bg)',
-  outline: 'none',
-  width: '100%',
-  transition: 'border-color 0.2s',
+  border: '1.5px solid var(--border)', borderRadius: 'var(--radius)',
+  padding: '10px 14px', fontSize: '14px', fontFamily: 'var(--font-body)',
+  color: 'var(--text)', background: 'var(--bg)', outline: 'none', width: '100%',
+  transition: 'border-color 0.2s', boxSizing: 'border-box',
 };
 
-const dateRowStyle = {
-  display: 'flex',
-  gap: '12px',
-};
-
-/* For date pickers — overflow:hidden is fine, they render via portal */
-const datePickerWrapStyle = {
-  border: '1.5px solid var(--border)',
-  borderRadius: 'var(--radius)',
-  height: '44px',
-  background: 'var(--bg)',
-  overflow: 'hidden',
-  marginTop: '5px',
-};
-
-/* For Headless UI dropdowns — must be overflow:visible so the menu can render outside */
-const dropdownWrapStyle = {
-  border: '1.5px solid var(--border)',
-  borderRadius: 'var(--radius)',
-  height: '44px',
-  background: 'var(--bg)',
-  overflow: 'visible',
-  marginTop: '5px',
-  position: 'relative',
-  zIndex: 10,
-};
-
-const formFooterStyle = {
-  padding: '0 24px 18px',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '10px',
-};
-
-const bookBtnStyle = {
-  width: '100%',
-  justifyContent: 'center',
-  fontSize: '15px',
-  padding: '13px 20px',
-};
-
-const callBtnStyle = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: '11px 20px',
-  borderRadius: 'var(--radius)',
-  border: '2px solid var(--border-mid)',
-  fontSize: '14px',
-  fontWeight: '600',
-  color: 'var(--text)',
-  fontFamily: 'var(--font-body)',
-  textDecoration: 'none',
-  transition: 'border-color 0.2s, color 0.2s',
+const selectStyle = {
+  ...inputStyle,
   cursor: 'pointer',
 };
 
-const trustRowStyle = {
-  display: 'flex',
-  gap: '6px',
-  justifyContent: 'center',
-  flexWrap: 'wrap',
-  padding: '0 24px 20px',
-};
+const datePickerWrapStyle = { border: '1.5px solid var(--border)', borderRadius: 'var(--radius)', height: '44px', background: 'var(--bg)', overflow: 'hidden', marginTop: '5px' };
+const dropdownWrapStyle   = { border: '1.5px solid var(--border)', borderRadius: 'var(--radius)', height: '44px', background: 'var(--bg)', overflow: 'visible', marginTop: '5px', position: 'relative', zIndex: 10 };
 
-const trustPillStyle = {
-  fontSize: '11px',
-  color: 'var(--text-faint)',
-  background: 'var(--bg)',
-  border: '1px solid var(--border)',
-  padding: '3px 10px',
-  borderRadius: '100px',
-};
-
-/* Rules card */
-const rulesCardStyle = {
-  background: 'var(--bg-white)',
-  borderRadius: 'var(--radius-lg)',
-  border: '1.5px solid var(--border)',
-  padding: '24px',
-  boxShadow: 'var(--shadow-sm)',
-};
-
-const ruleItemStyle = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '12px',
-  padding: '10px 0',
-  borderBottom: '1px solid var(--border)',
-};
-
-const ruleIconStyle = {
-  color: 'var(--blue)',
-  fontSize: '12px',
-  flexShrink: 0,
-};
+const formFooterStyle = { padding: '0 24px 18px', display: 'flex', flexDirection: 'column', gap: '10px' };
+const bookBtnStyle    = { width: '100%', justifyContent: 'center', fontSize: '15px', padding: '13px 20px' };
+const callBtnStyle    = { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 20px', borderRadius: 'var(--radius)', border: '2px solid var(--border-mid)', fontSize: '14px', fontWeight: '600', color: 'var(--text)', fontFamily: 'var(--font-body)', textDecoration: 'none', transition: 'border-color 0.2s, color 0.2s', cursor: 'pointer' };
+const trustRowStyle   = { display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap', padding: '0 24px 20px' };
+const trustPillStyle  = { fontSize: '11px', color: 'var(--text-faint)', background: 'var(--bg)', border: '1px solid var(--border)', padding: '3px 10px', borderRadius: '100px' };
+const rulesCardStyle  = { background: 'var(--bg-white)', borderRadius: 'var(--radius-lg)', border: '1.5px solid var(--border)', padding: '24px', boxShadow: 'var(--shadow-sm)' };
+const ruleItemStyle   = { display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0', borderBottom: '1px solid var(--border)' };
+const ruleIconStyle   = { color: 'var(--blue)', fontSize: '12px', flexShrink: 0 };
 
 export default RoomDetails;
