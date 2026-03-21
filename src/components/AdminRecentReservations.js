@@ -10,12 +10,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 const AVATAR_COLORS = ['#f0c060','#40e0c8','#f06090','#9080f0','#50d890','#60b0f0'];
-const ROOM_SLOTS = {
-  'Queen Bed':      [101, 102, 103, 104, 105],
-  'Two Queen Beds': [201, 202, 203, 204, 205],
-  'King Bed':       [301, 302, 303, 304, 305],
-  'Kitchenette':    [401, 402, 403, 404, 405],
-};
+const ALL_ROOM_NUMBERS = Array.from({ length: 23 }, (_, i) => i + 1);
 const PAGE_SIZE = 8;
 const PAYMENT_METHODS = ['Cash', 'Credit Card', 'Debit Card', 'E-Transfer', 'Other'];
 
@@ -660,7 +655,7 @@ const AdminRecentReservations = () => {
                   <Field label="Room Number *">
                     <select style={{ ...mi, opacity: !selectedRoomName ? 0.5 : 1 }} value={roomNumber} onChange={e => setRoomNumber(e.target.value)} required disabled={!selectedRoomName}>
                       <option value="">{selectedRoomName ? 'Select Number' : '— pick room first —'}</option>
-                      {(ROOM_SLOTS[selectedRoomName] || []).map(n => <option key={n} value={n}>{n}</option>)}
+                      {ALL_ROOM_NUMBERS.map(n => <option key={n} value={n}>{n}</option>)}
                     </select>
                   </Field>
                 </FieldRow>

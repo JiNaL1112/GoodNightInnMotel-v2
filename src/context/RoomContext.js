@@ -5,12 +5,7 @@ import { imageData } from '../data';
 
 export const RoomContext = createContext();
 
-const ROOM_SLOTS = {
-  'Queen Bed':      [101, 102, 103, 104, 105],
-  'Two Queen Beds': [201, 202, 203, 204, 205],
-  'King Bed':       [301, 302, 303, 304, 305],
-  'Kitchenette':    [401, 402, 403, 404, 405],
-};
+const ALL_ROOM_NUMBERS = Array.from({ length: 23 }, (_, i) => i + 1);
 
 const RoomProvider = ({ children }) => {
   const [rooms,            setRooms]            = useState([]);
@@ -87,11 +82,7 @@ const RoomProvider = ({ children }) => {
 
   const handleReservation = async () => {
     try {
-      const assignedRoomNumber =
-        roomNumber ||
-        (selectedRoomName && ROOM_SLOTS[selectedRoomName]
-          ? ROOM_SLOTS[selectedRoomName][0]
-          : null);
+      const assignedRoomNumber = roomNumber || null;
 
       await addDoc(collection(db, 'reservations'), {
         // Core fields

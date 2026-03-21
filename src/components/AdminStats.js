@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
-const TOTAL_ROOMS = 20;
+const TOTAL_ROOMS = 23;
 
 // ── Single source of truth — identical to AdminRecentReservations ─────────────
 const getEffectiveStatus = (r) => {

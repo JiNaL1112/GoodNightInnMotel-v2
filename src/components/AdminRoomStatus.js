@@ -2,19 +2,10 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
-const ROOM_TYPES = [
-  { name: 'Queen Bed',      icon: '🛏️',  color: '#60b0f0', slots: [101,102,103,104,105] },
-  { name: 'Two Queen Beds', icon: '🛏🛏', color: '#f0c060', slots: [201,202,203,204,205] },
-  { name: 'King Bed',       icon: '👑',   color: '#9080f0', slots: [301,302,303,304,305] },
-  { name: 'Kitchenette',    icon: '🍳',   color: '#50d890', slots: [401,402,403,404,405] },
-];
+// Flat list of 23 rooms — no type grouping
+const ALL_ROOM_NUMBERS = Array.from({ length: 23 }, (_, i) => i + 1);
 
 // ── 3 states the admin actually needs to know about ──────────────────────────
-// 🔴 Occupied — guest is physically in the room right now
-// 🟡 Booked   — confirmed future reservation (room will be used soon)
-// 🟢 Free     — nothing confirmed, room is available
-// Pending requests are intentionally excluded from this view.
-// Admin handles those in the Reservations tab on their own schedule.
 const getRoomState = (r) => {
   if (!r) return null;
   if (r.status === 'checked-out') return null;
@@ -55,32 +46,16 @@ const STATE = {
 };
 
 const AdminRoomStatus = () => {
-  const [firestoreRooms, setFirestoreRooms] = useState([]);
-  const [reservations,   setReservations]   = useState([]);
-  const [loading,        setLoading]        = useState(true);
-  const [filter,         setFilter]         = useState('all');
+  const [reservations, setReservations] = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [filter,       setFilter]       = useState('all');
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [roomSnap, resSnap] = await Promise.all([
-        getDocs(collection(db, 'rooms')),
-        getDocs(query(collection(db, 'reservations'), orderBy('createdAt', 'desc'))),
-      ]);
-      const rooms = roomSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const res   = resSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setFirestoreRooms(rooms);
+      const resSnap = await getDocs(query(collection(db, 'reservations'), orderBy('createdAt', 'desc')));
+      const res     = resSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       setReservations(res);
-
-      // ── DEBUG: remove once counts are correct ─────────────────────────────
-      console.group('🏨 AdminRoomStatus — data check');
-      console.log('Room docs:', rooms.map(r => ({ id: r.id, name: r.name })));
-      console.log('In-house:', res
-        .filter(r => r.checkedInAt && r.status !== 'checked-out')
-        .map(r => ({ pname: r.pname, roomName: r.roomName, roomNumber: r.roomNumber, roomId: r.roomId }))
-      );
-      console.groupEnd();
-      // ── END DEBUG ─────────────────────────────────────────────────────────
     } catch (err) {
       console.error(err);
     } finally {
@@ -90,33 +65,11 @@ const AdminRoomStatus = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const getSlotData = (roomName, roomNumber) => {
-    // Match the Firestore room doc by name (case-insensitive)
-    const roomDoc = firestoreRooms.find(
-      r => r.name?.trim().toLowerCase() === roomName.trim().toLowerCase()
+  // Match reservations purely by room number — no type dependency
+  const getSlotData = (roomNumber) => {
+    const slotRes = reservations.filter(r =>
+      String(r.roomNumber) === String(roomNumber)
     );
-
-    // Filter reservations that belong to this specific room slot.
-    // A reservation matches if:
-    //   (a) roomId matches the Firestore doc AND roomNumber matches — ideal case
-    //   (b) roomId matches AND roomNumber is missing/null — legacy data with no room number saved
-    //   (c) roomName matches AND roomNumber matches — fallback if roomId is missing
-    const slotRes = reservations.filter(r => {
-      const numMatch = String(r.roomNumber) === String(roomNumber);
-      const nameMatch = r.roomName?.trim().toLowerCase() === roomName.trim().toLowerCase();
-      const idMatch   = roomDoc && r.roomId === roomDoc.id;
-
-      // Reservation has a roomNumber saved — must match the slot number
-      if (r.roomNumber != null && r.roomNumber !== '') {
-        return numMatch && (idMatch || nameMatch);
-      }
-
-      // No roomNumber saved — match by roomId or roomName only
-      // (these are legacy/incomplete records — assign them to the first slot of their type)
-      return (idMatch || nameMatch) && roomNumber === ROOM_TYPES.find(t =>
-        t.name.toLowerCase() === roomName.toLowerCase()
-      )?.slots[0];
-    });
 
     const occupiedRes = slotRes.find(r => getRoomState(r) === 'occupied');
     if (occupiedRes) return { state: 'occupied', res: occupiedRes };
@@ -130,13 +83,14 @@ const AdminRoomStatus = () => {
       })[0] || null;
 
     if (bookedRes) return { state: 'booked', res: bookedRes };
-
     return { state: 'free', res: null };
   };
 
-  const allCards = ROOM_TYPES.flatMap(type =>
-    type.slots.map(num => ({ number: num, type, ...getSlotData(type.name, num) }))
-  );
+  // Build flat card list — no type object attached
+  const allCards = ALL_ROOM_NUMBERS.map(num => ({
+    number: num,
+    ...getSlotData(num),
+  }));
 
   const totOccupied = allCards.filter(c => c.state === 'occupied').length;
   const totBooked   = allCards.filter(c => c.state === 'booked').length;
@@ -159,7 +113,7 @@ const AdminRoomStatus = () => {
       <div className="adm-panel-head" style={{ flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span className="adm-panel-title">Room Status</span>
-          <span className="adm-panel-tag">20 Rooms</span>
+          <span className="adm-panel-tag">23 Rooms</span>
         </div>
         <button
           onClick={fetchData}
@@ -171,7 +125,7 @@ const AdminRoomStatus = () => {
         >🔄 Refresh</button>
       </div>
 
-      {/* ── Filter pills with counts ──────────────────────────────────────── */}
+      {/* Filter pills */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
         {[
           { key: 'all',      dot: null,      label: 'All',      count: allCards.length },
@@ -217,7 +171,7 @@ const AdminRoomStatus = () => {
         })}
       </div>
 
-      {/* ── Room card grid ────────────────────────────────────────────────── */}
+      {/* Room card grid */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))',
@@ -236,17 +190,17 @@ const AdminRoomStatus = () => {
                 cursor: 'default',
               }}
               onMouseEnter={e => {
-                e.currentTarget.style.transform  = 'translateY(-3px)';
-                e.currentTarget.style.boxShadow  = `0 6px 20px ${st.border}`;
+                e.currentTarget.style.transform = 'translateY(-3px)';
+                e.currentTarget.style.boxShadow = `0 6px 20px ${st.border}`;
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.transform  = 'translateY(0)';
-                e.currentTarget.style.boxShadow  = 'none';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
               }}
             >
-              {/* Top row: type icon + status badge */}
+              {/* Top row: room icon + status badge */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <span style={{ fontSize: 16 }}>{card.type.icon}</span>
+                <span style={{ fontSize: 16 }}>🛏️</span>
                 <span style={{
                   fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 99,
                   background: 'rgba(0,0,0,0.3)', color: st.color, letterSpacing: '0.5px',
@@ -268,9 +222,9 @@ const AdminRoomStatus = () => {
                 {card.number}
               </div>
 
-              {/* Room type */}
+              {/* Room type from reservation (if any) */}
               <div style={{ fontSize: 10, color: 'var(--text-3,#888)', marginBottom: 10 }}>
-                {card.type.name}
+                {card.res?.roomName || 'Room'}
               </div>
 
               {/* State-specific info */}
