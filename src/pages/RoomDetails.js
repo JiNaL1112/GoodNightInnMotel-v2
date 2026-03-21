@@ -27,7 +27,7 @@ const rules = [
   'No Smoking',
 ];
 
-const PAYMENT_METHODS = ['Cash', 'Credit Card', 'Debit Card', 'E-Transfer', 'Other'];
+const PAYMENT_METHODS = ['Credit Card', 'Debit Card'];
 
 const RoomDetails = () => {
   const {

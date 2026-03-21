@@ -12,7 +12,7 @@ import html2canvas from 'html2canvas';
 const AVATAR_COLORS = ['#f0c060','#40e0c8','#f06090','#9080f0','#50d890','#60b0f0'];
 const ALL_ROOM_NUMBERS = Array.from({ length: 23 }, (_, i) => i + 1);
 const PAGE_SIZE = 8;
-const PAYMENT_METHODS = ['Cash', 'Credit Card', 'Debit Card', 'E-Transfer', 'Other'];
+const PAYMENT_METHODS = ['Credit Card', 'Debit Card'];
 
 const SORT_COLS = {
   guest:    r => r.pname?.toLowerCase() || '',
