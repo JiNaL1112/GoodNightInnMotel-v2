@@ -156,13 +156,6 @@ const AdminRecentReservations = () => {
     finally { setSaving(false); }
   };
 
-  // ── UPDATED: generateBill with correct formula matching physical registration form ──
-  // Formula:
-  //   Room Total        = rate × nights
-  //   Accommodation Tax = Room Total × 4%
-  //   Sub Total         = Room Total + Accommodation Tax
-  //   HST               = Sub Total × 13%
-  //   Grand Total       = Sub Total + HST
   const generateBill = async (res) => {
     const roomSnap = await getDocs(collection(db, 'rooms'));
     const room = roomSnap.docs.map(d => ({ ...d.data(), id: d.id })).find(r => r.id === res.roomId);
@@ -172,11 +165,11 @@ const AdminRecentReservations = () => {
     const checkOut = res.checkOut?.toDate ? res.checkOut.toDate() : new Date(res.checkOut);
 
     const nights    = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
-    const roomTotal = room.price * nights;         // Room Total
-    const accomTax  = roomTotal * 0.04;            // Accommodation Tax 4%
-    const subTotal  = roomTotal + accomTax;        // Sub Total
-    const hst       = subTotal * 0.13;             // HST 13% (applied on Sub Total)
-    const total     = subTotal + hst;              // Grand Total
+    const roomTotal = room.price * nights;
+    const accomTax  = roomTotal * 0.04;
+    const subTotal  = roomTotal + accomTax;
+    const hst       = subTotal * 0.13;
+    const total     = subTotal + hst;
 
     setBillDetails({
       guest:       res.pname,
@@ -272,7 +265,7 @@ const AdminRecentReservations = () => {
   const hasFilters = search || filterRoom || filterFrom || filterTo;
   const clearFilters = () => { setSearch(''); setFilterRoom(''); setFilterFrom(''); setFilterTo(''); };
 
-  // ── Excel export (Checked Out tab) ────────────────────────────────────────
+  // ── Excel export ────────────────────────────────────────────────────────────
   const handleExportExcel = async () => {
     if (sorted.length === 0) { alert('No checked-out records to export.'); return; }
 
@@ -339,7 +332,6 @@ const AdminRecentReservations = () => {
     { id: 'checkedout', label: '🏁 Checked Out', count: checkedOutList.length, activeColor: '#40e0c8', activeBg: 'rgba(64,224,200,0.12)'  },
   ];
 
-  // ── Status badge ───────────────────────────────────────────────────────────
   const StatusBadge = ({ eff }) => {
     const map = {
       'pending':     { label: '⏳ Pending',     bg: 'rgba(240,192,96,0.12)',  color: '#f0c060' },
@@ -357,7 +349,6 @@ const AdminRecentReservations = () => {
     );
   };
 
-  // ── Action buttons per status ──────────────────────────────────────────────
   const ActionButtons = ({ r }) => {
     const eff = r._eff;
     if (eff === 'pending') return (
@@ -368,26 +359,14 @@ const AdminRecentReservations = () => {
     );
     if (eff === 'upcoming') return (
       <>
-        <button
-          className="adm-btn"
-          style={{ background: 'rgba(80,216,144,0.15)', color: '#50d890', fontWeight: 700, border: '1px solid rgba(80,216,144,0.3)', whiteSpace: 'nowrap' }}
-          onClick={() => handleCheckIn(r)}
-        >
-          🏨 Check In
-        </button>
+        <button className="adm-btn" style={{ background: 'rgba(80,216,144,0.15)', color: '#50d890', fontWeight: 700, border: '1px solid rgba(80,216,144,0.3)', whiteSpace: 'nowrap' }} onClick={() => handleCheckIn(r)}>🏨 Check In</button>
         <button className="adm-btn adm-btn-edit"   onClick={() => openEdit(r)}>Edit</button>
         <button className="adm-btn adm-btn-reject"  onClick={() => handleDelete(r.id)}>Cancel</button>
       </>
     );
     if (eff === 'in-house') return (
       <>
-        <button
-          className="adm-btn"
-          style={{ background: 'rgba(240,96,144,0.15)', color: '#f06090', fontWeight: 700, border: '1px solid rgba(240,96,144,0.3)', whiteSpace: 'nowrap' }}
-          onClick={() => handleCheckOut(r)}
-        >
-          🏁 Check Out
-        </button>
+        <button className="adm-btn" style={{ background: 'rgba(240,96,144,0.15)', color: '#f06090', fontWeight: 700, border: '1px solid rgba(240,96,144,0.3)', whiteSpace: 'nowrap' }} onClick={() => handleCheckOut(r)}>🏁 Check Out</button>
         <button className="adm-btn adm-btn-edit" onClick={() => openEdit(r)}>Edit</button>
         <button className="adm-btn adm-btn-bill" onClick={() => generateBill(r)}>Receipt</button>
       </>
@@ -401,7 +380,6 @@ const AdminRecentReservations = () => {
     return null;
   };
 
-  // ── Sortable th ────────────────────────────────────────────────────────────
   const SortTh = ({ col, label }) => (
     <th onClick={() => handleSort(col)} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none', color: sortCol === col ? 'var(--gold)' : 'var(--text-3)' }}>
       {label}<SortArrow col={col} sortCol={sortCol} sortDir={sortDir} />
@@ -477,18 +455,7 @@ const AdminRecentReservations = () => {
             <button
               onClick={handleExportExcel}
               title={sorted.length === 0 ? 'No data to export' : `Export ${sorted.length} record(s) to Excel`}
-              style={{
-                ...inp,
-                cursor:     'pointer',
-                color:      '#40e0c8',
-                border:     '1px solid rgba(64,224,200,0.35)',
-                background: 'rgba(64,224,200,0.08)',
-                fontWeight: 700,
-                whiteSpace: 'nowrap',
-                display:    'flex',
-                alignItems: 'center',
-                gap:        5,
-              }}
+              style={{ ...inp, cursor: 'pointer', color: '#40e0c8', border: '1px solid rgba(64,224,200,0.35)', background: 'rgba(64,224,200,0.08)', fontWeight: 700, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}
             >
               ⬇ Export Excel
             </button>
@@ -584,37 +551,37 @@ const AdminRecentReservations = () => {
       {/* ── Add/Edit Modal ── */}
       {showModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: 'var(--ink-1)', borderRadius: 16, width: '100%', maxWidth: 540, border: '1px solid var(--border-2)', overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: '1px solid var(--border)' }}>
-              <span style={{ fontWeight: 700, fontSize: 16 }}>{isEditing ? 'Edit Booking' : 'Add Booking'}</span>
-              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-3)', fontSize: 22, cursor: 'pointer' }}>×</button>
+          <div style={{ background: '#ffffff', borderRadius: 16, width: '100%', maxWidth: 540, border: '1px solid #e5e7eb', overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,0.25)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: '1px solid #e5e7eb', background: '#f8f7f4' }}>
+              <span style={{ fontWeight: 700, fontSize: 16, color: '#1a1a1a' }}>{isEditing ? 'Edit Booking' : 'Add Booking'}</span>
+              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 22, cursor: 'pointer' }}>×</button>
             </div>
-            <form onSubmit={handleFormSubmit} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <form onSubmit={handleFormSubmit} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14, background: '#ffffff' }}>
               {[['Guest Name', pname, setPName, 'text'], ['Email', email, setEmail, 'email'], ['Phone', phone, setPhone, 'tel']].map(([label, val, setter, type]) => (
                 <div key={label}>
-                  <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>{label}</div>
-                  <input required type={type} value={val} onChange={e => setter(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', ...inp }} />
+                  <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>{label}</div>
+                  <input required type={type} value={val} onChange={e => setter(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', background: '#f8f7f4', border: '1.5px solid #e5e7eb', borderRadius: 8, padding: '10px 14px', fontSize: 13, fontFamily: "'DM Sans', sans-serif", color: '#1a1a1a', outline: 'none' }} />
                 </div>
               ))}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 {[['Check-in', checkInDate, setCheckInDate], ['Check-out', checkOutDate, setCheckOutDate]].map(([label, val, setter]) => (
                   <div key={label}>
-                    <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>{label}</div>
-                    <input required type="date" value={val ? new Date(val).toISOString().split('T')[0] : ''} onChange={e => setter(new Date(e.target.value))} style={{ width: '100%', boxSizing: 'border-box', ...inp }} />
+                    <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>{label}</div>
+                    <input required type="date" value={val ? new Date(val).toISOString().split('T')[0] : ''} onChange={e => setter(new Date(e.target.value))} style={{ width: '100%', boxSizing: 'border-box', background: '#f8f7f4', border: '1.5px solid #e5e7eb', borderRadius: 8, padding: '10px 14px', fontSize: 13, fontFamily: "'DM Sans', sans-serif", color: '#1a1a1a', outline: 'none' }} />
                   </div>
                 ))}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
-                  <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>Room Type</div>
-                  <select required value={selectedRoomId} onChange={e => { const sel = rooms.find(r => r.id === e.target.value); setSelectedRoomId(sel?.id || ''); setSelectedRoomName(sel?.name || ''); setRoomNumber(''); }} style={{ width: '100%', ...inp }}>
+                  <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>Room Type</div>
+                  <select required value={selectedRoomId} onChange={e => { const sel = rooms.find(r => r.id === e.target.value); setSelectedRoomId(sel?.id || ''); setSelectedRoomName(sel?.name || ''); setRoomNumber(''); }} style={{ width: '100%', background: '#f8f7f4', border: '1.5px solid #e5e7eb', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#1a1a1a', outline: 'none' }}>
                     <option value="">Select Room</option>
                     {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>Room Number</div>
-                  <select required value={roomNumber} onChange={e => setRoomNumber(e.target.value)} disabled={!selectedRoomName} style={{ width: '100%', ...inp, opacity: !selectedRoomName ? 0.5 : 1 }}>
+                  <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>Room Number</div>
+                  <select required value={roomNumber} onChange={e => setRoomNumber(e.target.value)} disabled={!selectedRoomName} style={{ width: '100%', background: '#f8f7f4', border: '1.5px solid #e5e7eb', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#1a1a1a', outline: 'none', opacity: !selectedRoomName ? 0.5 : 1 }}>
                     <option value="">{selectedRoomName ? 'Select Number' : '— pick room first —'}</option>
                     {(ROOM_SLOTS[selectedRoomName] || []).map(n => <option key={n} value={n}>{n}</option>)}
                   </select>
@@ -623,14 +590,14 @@ const AdminRecentReservations = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 {[['Adults', adults, setAdults, 1], ['Kids', kids, setKids, 0]].map(([label, val, setter, min]) => (
                   <div key={label}>
-                    <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>{label}</div>
-                    <input required type="number" min={min} value={val} onChange={e => setter(parseInt(e.target.value))} style={{ width: '100%', boxSizing: 'border-box', ...inp }} />
+                    <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>{label}</div>
+                    <input required type="number" min={min} value={val} onChange={e => setter(parseInt(e.target.value))} style={{ width: '100%', boxSizing: 'border-box', background: '#f8f7f4', border: '1.5px solid #e5e7eb', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#1a1a1a', outline: 'none' }} />
                   </div>
                 ))}
               </div>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
-                <button type="button" onClick={() => setShowModal(false)} style={{ padding: '9px 20px', borderRadius: 8, border: '1px solid var(--border-2)', background: 'transparent', color: 'var(--text-3)', cursor: 'pointer', fontSize: 13 }}>Cancel</button>
-                <button type="submit" disabled={saving} style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: 'var(--gold)', color: '#000', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', fontSize: 13, opacity: saving ? 0.7 : 1 }}>
+                <button type="button" onClick={() => setShowModal(false)} style={{ padding: '9px 20px', borderRadius: 8, border: '1.5px solid #d1d5db', background: '#fff', color: '#374151', cursor: 'pointer', fontSize: 13, fontFamily: "'DM Sans', sans-serif" }}>Cancel</button>
+                <button type="submit" disabled={saving} style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: saving ? '#93c5fd' : '#2563eb', color: '#fff', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', fontSize: 13, fontFamily: "'DM Sans', sans-serif" }}>
                   {saving ? 'Saving…' : isEditing ? 'Update' : 'Add Booking'}
                 </button>
               </div>
@@ -639,92 +606,136 @@ const AdminRecentReservations = () => {
         </div>
       )}
 
-      {/* ── Receipt Modal ── */}
+      {/* ── Receipt Modal — fully opaque, visible design ── */}
       {billModal && billDetails && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: 'var(--ink-1)', borderRadius: 16, width: '100%', maxWidth: 440, border: '1px solid var(--border-2)', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 16,
+            width: '100%',
+            maxWidth: 460,
+            border: '1px solid #e5e7eb',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            boxShadow: '0 24px 60px rgba(0,0,0,0.3)',
+            fontFamily: "'DM Sans', sans-serif",
+          }}>
 
-            {/* Modal header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: '1px solid var(--border)' }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 16 }}>Guest Receipt</div>
-                <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>Good Night Inn · HST# 833074875RT0001</div>
+            {/* ── Blue gradient header ── */}
+            <div style={{
+              background: 'linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)',
+              padding: '22px 24px',
+              borderRadius: '16px 16px 0 0',
+              color: '#fff',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 40, height: 40, background: 'rgba(255,255,255,0.15)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🌙</div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15, letterSpacing: 0.3 }}>GoodNight Inn</div>
+                    <div style={{ fontSize: 10, opacity: 0.7, marginTop: 1 }}>HST# 833074875RT0001 · Port Colborne, ON</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setBillModal(false)}
+                  style={{ background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.35)', color: '#fff', width: 32, height: 32, borderRadius: 8, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >×</button>
               </div>
-              <button onClick={() => setBillModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-3)', fontSize: 22, cursor: 'pointer' }}>×</button>
+              <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.2)' }}>
+                <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 }}>Guest Receipt</div>
+                <div style={{ fontSize: 20, fontWeight: 700 }}>{billDetails.guest}</div>
+                <div style={{ fontSize: 13, opacity: 0.8, marginTop: 2 }}>{billDetails.roomName} · Room {billDetails.roomNumber}</div>
+              </div>
             </div>
 
-            <div style={{ padding: 24 }}>
+            <div style={{ padding: '20px 24px' }}>
 
-              {/* Guest / Stay info rows */}
-              {[
-                ['Guest',      billDetails.guest],
-                ['Room Type',  billDetails.roomName],
-                ['Room No.',   billDetails.roomNumber],
-                ['Check-in',   billDetails.checkIn],
-                ['Check-out',  billDetails.checkOut],
-                ['Nights',     billDetails.nights],
-                ['Rate / Night', `$${billDetails.roomPrice.toFixed(2)}`],
-              ].map(([label, val]) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
-                  <span style={{ color: 'var(--text-3)' }}>{label}</span>
-                  <span style={{ fontWeight: 600 }}>{val}</span>
+              {/* ── Stay info cards ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
+                {[
+                  ['📅 Check-in',   billDetails.checkIn],
+                  ['📅 Check-out',  billDetails.checkOut],
+                  ['🌙 Nights',     String(billDetails.nights)],
+                  ['💵 Rate/Night', `$${billDetails.roomPrice.toFixed(2)}`],
+                ].map(([label, val]) => (
+                  <div key={label} style={{ background: '#f8f7f4', borderRadius: 10, padding: '12px 14px', border: '1px solid #e5e7eb' }}>
+                    <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{label}</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a' }}>{val}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Billing breakdown ── */}
+              <div style={{ borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden', marginBottom: 20 }}>
+
+                {/* Section header */}
+                <div style={{ background: '#f8f7f4', padding: '9px 16px', borderBottom: '1px solid #e5e7eb' }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#6b7280' }}>Billing Summary</span>
                 </div>
-              ))}
-
-              {/* ── Billing breakdown matching physical form ── */}
-              <div style={{ marginTop: 14, borderRadius: 10, border: '1px solid var(--border)', overflow: 'hidden' }}>
 
                 {/* Room Total */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid var(--border)', fontSize: 13, background: 'rgba(255,255,255,0.02)' }}>
-                  <span style={{ color: 'var(--text-3)' }}>Room Total</span>
-                  <span style={{ fontWeight: 600 }}>${billDetails.roomTotal.toFixed(2)}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid #f3f4f6', background: '#fff' }}>
+                  <span style={{ fontSize: 13, color: '#374151' }}>
+                    Room Total <span style={{ fontSize: 11, color: '#9ca3af' }}>({billDetails.nights} night{billDetails.nights !== 1 ? 's' : ''} × ${billDetails.roomPrice.toFixed(2)})</span>
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>${billDetails.roomTotal.toFixed(2)}</span>
                 </div>
 
-                {/* Accommodation Tax 4% */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid var(--border)', fontSize: 13, background: 'rgba(255,255,255,0.02)' }}>
-                  <span style={{ color: 'var(--text-3)' }}>Accommodation Tax (4%)</span>
-                  <span style={{ fontWeight: 600 }}>${billDetails.accomTax.toFixed(2)}</span>
+                {/* Accommodation Tax */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid #f3f4f6', background: '#fefefe' }}>
+                  <span style={{ fontSize: 13, color: '#374151' }}>
+                    Accommodation Tax <span style={{ fontSize: 11, color: '#9ca3af' }}>(4%)</span>
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>${billDetails.accomTax.toFixed(2)}</span>
                 </div>
 
                 {/* Sub Total */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid var(--border)', fontSize: 13, background: 'rgba(255,255,255,0.04)' }}>
-                  <span style={{ color: 'var(--text-2)', fontWeight: 700 }}>Sub Total</span>
-                  <span style={{ fontWeight: 700 }}>${billDetails.subTotal.toFixed(2)}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid #dbeafe', background: '#eff6ff' }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#1e3a5f' }}>Sub Total</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: '#1e3a5f' }}>${billDetails.subTotal.toFixed(2)}</span>
                 </div>
 
-                {/* HST 13% */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid var(--border)', fontSize: 13, background: 'rgba(255,255,255,0.02)' }}>
-                  <span style={{ color: 'var(--text-3)' }}>HST (13%)</span>
-                  <span style={{ fontWeight: 600 }}>${billDetails.hstAmount.toFixed(2)}</span>
+                {/* HST */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid #e5e7eb', background: '#fefefe' }}>
+                  <span style={{ fontSize: 13, color: '#374151' }}>
+                    HST <span style={{ fontSize: 11, color: '#9ca3af' }}>(13%)</span>
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>${billDetails.hstAmount.toFixed(2)}</span>
                 </div>
 
                 {/* Grand Total */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px', background: 'rgba(240,192,96,0.10)', borderTop: '1px solid rgba(240,192,96,0.25)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: 'linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)' }}>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Total (CAD)</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>Includes all taxes</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Total (CAD)</div>
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 2 }}>All taxes included</div>
                   </div>
-                  <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--gold)', fontFamily: 'var(--font-mono)' }}>
+                  <div style={{ fontSize: 30, fontWeight: 800, color: '#fff', fontFamily: 'monospace', letterSpacing: -1 }}>
                     ${billDetails.totalAmount.toFixed(2)}
                   </div>
                 </div>
               </div>
 
-              {/* Action buttons */}
-              <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+              {/* ── Action buttons ── */}
+              <div style={{ display: 'flex', gap: 10 }}>
                 <button
                   onClick={() => setBillModal(false)}
-                  style={{ flex: 1, padding: 11, borderRadius: 8, border: '1px solid var(--border-2)', background: 'transparent', color: 'var(--text-3)', cursor: 'pointer', fontSize: 13 }}
+                  style={{ flex: 1, padding: '11px 16px', borderRadius: 10, border: '1.5px solid #d1d5db', background: '#fff', color: '#374151', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: "'DM Sans', sans-serif" }}
                 >
                   Close
                 </button>
                 <button
                   onClick={sendBill}
                   disabled={sendingEmail}
-                  style={{ flex: 2, padding: 11, borderRadius: 8, border: 'none', background: 'var(--gold)', color: '#000', fontWeight: 700, cursor: sendingEmail ? 'not-allowed' : 'pointer', fontSize: 14, opacity: sendingEmail ? 0.7 : 1 }}
+                  style={{ flex: 2, padding: '11px 16px', borderRadius: 10, border: 'none', background: sendingEmail ? '#93c5fd' : '#2563eb', color: '#fff', fontWeight: 700, cursor: sendingEmail ? 'not-allowed' : 'pointer', fontSize: 14, fontFamily: "'DM Sans', sans-serif" }}
                 >
-                  {sendingEmail ? 'Sending…' : '📧 Email Receipt to Guest'}
+                  {sendingEmail ? '⏳ Sending…' : '📧 Email Receipt to Guest'}
                 </button>
+              </div>
+
+              {/* ── Footer ── */}
+              <div style={{ marginTop: 14, textAlign: 'center', fontSize: 11, color: '#9ca3af', lineHeight: 1.6 }}>
+                📍 664 Main St. W, Port Colborne, ON L3K 5V4<br />
+                📞 1-833-855-1818 · manager@goodnightinn.ca
               </div>
             </div>
           </div>
