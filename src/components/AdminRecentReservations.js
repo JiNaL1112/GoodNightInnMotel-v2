@@ -25,10 +25,6 @@ const SORT_COLS = {
 };
 
 // ── 4-state status engine ─────────────────────────────────────────────────────
-// 'pending'     → waiting for admin to confirm
-// 'upcoming'    → confirmed, but checkIn date is still in the future
-// 'in-house'    → admin manually checked them in (checkedInAt exists) OR checkIn ≤ today and NOT yet checked out
-// 'checked-out' → manually checked out, or checkOut date has passed
 const getEffectiveStatus = (r) => {
   if (r.status === 'checked-out') return 'checked-out';
 
@@ -39,18 +35,9 @@ const getEffectiveStatus = (r) => {
     const ciDay    = new Date(checkIn);  ciDay.setHours(0, 0, 0, 0);
     const coDay    = new Date(checkOut); coDay.setHours(0, 0, 0, 0);
 
-    // Auto-move to checked-out if checkout date has passed
     if (coDay < today) return 'checked-out';
-
-    // If admin manually checked them in → in-house
     if (r.checkedInAt) return 'in-house';
-
-    // Check-in day has arrived but admin hasn't checked them in yet → still upcoming
-    // (room is NOT physically occupied until admin clicks Check In)
     if (ciDay > today) return 'upcoming';
-
-    // checkIn date is today or past but no manual check-in yet
-    // We keep it as 'upcoming' so room isn't shown as occupied until admin acts
     return 'upcoming';
   }
 
@@ -114,20 +101,17 @@ const AdminRecentReservations = () => {
     else { setSortCol(col); setSortDir('asc'); }
   };
 
-  // Pending → confirmed upcoming
   const handleConfirm = async (id) => {
     await updateDoc(doc(db, 'reservations', id), { status: 'booked' });
     fetchReservations();
   };
 
-  // Admin marks guest as physically arrived → sets checkedInAt, moves to In-house
   const handleCheckIn = async (r) => {
     if (!window.confirm(`Check in ${r.pname}? This confirms the guest has arrived and the room is now occupied.`)) return;
     await updateDoc(doc(db, 'reservations', r.id), { checkedInAt: new Date() });
     fetchReservations();
   };
 
-  // Admin marks guest as departed → sets status: checked-out
   const handleCheckOut = async (r) => {
     if (!window.confirm(`Check out ${r.pname}? This will mark the reservation as completed.`)) return;
     await updateDoc(doc(db, 'reservations', r.id), {
@@ -172,20 +156,42 @@ const AdminRecentReservations = () => {
     finally { setSaving(false); }
   };
 
+  // ── UPDATED: generateBill with correct formula matching physical registration form ──
+  // Formula:
+  //   Room Total        = rate × nights
+  //   Accommodation Tax = Room Total × 4%
+  //   Sub Total         = Room Total + Accommodation Tax
+  //   HST               = Sub Total × 13%
+  //   Grand Total       = Sub Total + HST
   const generateBill = async (res) => {
     const roomSnap = await getDocs(collection(db, 'rooms'));
     const room = roomSnap.docs.map(d => ({ ...d.data(), id: d.id })).find(r => r.id === res.roomId);
     if (!room) return;
+
     const checkIn  = res.checkIn?.toDate  ? res.checkIn.toDate()  : new Date(res.checkIn);
     const checkOut = res.checkOut?.toDate ? res.checkOut.toDate() : new Date(res.checkOut);
-    const nights = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
-    const base = room.price * nights;
-    const hst  = base * 0.13;
+
+    const nights    = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
+    const roomTotal = room.price * nights;         // Room Total
+    const accomTax  = roomTotal * 0.04;            // Accommodation Tax 4%
+    const subTotal  = roomTotal + accomTax;        // Sub Total
+    const hst       = subTotal * 0.13;             // HST 13% (applied on Sub Total)
+    const total     = subTotal + hst;              // Grand Total
+
     setBillDetails({
-      guest: res.pname, roomName: room.name, roomNumber: res.roomNumber || 'N/A',
-      checkIn: checkIn.toDateString(), checkOut: checkOut.toDateString(),
-      nights, roomPrice: room.price, baseAmount: base, hstAmount: hst, totalAmount: base + hst,
-      email: res.email,
+      guest:       res.pname,
+      roomName:    room.name,
+      roomNumber:  res.roomNumber || 'N/A',
+      checkIn:     checkIn.toDateString(),
+      checkOut:    checkOut.toDateString(),
+      nights,
+      roomPrice:   room.price,
+      roomTotal,
+      accomTax,
+      subTotal,
+      hstAmount:   hst,
+      totalAmount: total,
+      email:       res.email,
     });
     setBillModal(true);
   };
@@ -195,11 +201,19 @@ const AdminRecentReservations = () => {
     setSendingEmail(true);
     try {
       await emailjs.send('service_d3cy1e9', 'template_11t5n5a', {
-        guest: billDetails.guest, room_name: billDetails.roomName, room_number: billDetails.roomNumber,
-        check_in: billDetails.checkIn, check_out: billDetails.checkOut, nights: billDetails.nights,
-        rate: `$${billDetails.roomPrice.toFixed(2)}`, subtotal: `$${billDetails.baseAmount.toFixed(2)}`,
-        hst: `$${billDetails.hstAmount.toFixed(2)}`, total: `$${billDetails.totalAmount.toFixed(2)}`,
-        to_email: billDetails.email,
+        guest:        billDetails.guest,
+        room_name:    billDetails.roomName,
+        room_number:  billDetails.roomNumber,
+        check_in:     billDetails.checkIn,
+        check_out:    billDetails.checkOut,
+        nights:       billDetails.nights,
+        rate:         `$${billDetails.roomPrice.toFixed(2)}`,
+        room_total:   `$${billDetails.roomTotal.toFixed(2)}`,
+        accom_tax:    `$${billDetails.accomTax.toFixed(2)}`,
+        subtotal:     `$${billDetails.subTotal.toFixed(2)}`,
+        hst:          `$${billDetails.hstAmount.toFixed(2)}`,
+        total:        `$${billDetails.totalAmount.toFixed(2)}`,
+        to_email:     billDetails.email,
       }, '8nzBG6xAhz4eIyVij');
       alert('Receipt sent!');
     } catch (err) { alert('Send failed'); }
@@ -254,17 +268,14 @@ const AdminRecentReservations = () => {
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const shown      = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  
 
   const hasFilters = search || filterRoom || filterFrom || filterTo;
   const clearFilters = () => { setSearch(''); setFilterRoom(''); setFilterFrom(''); setFilterTo(''); };
 
-  
-// ── Excel export (Checked Out tab) ────────────────────────────────────────
+  // ── Excel export (Checked Out tab) ────────────────────────────────────────
   const handleExportExcel = async () => {
     if (sorted.length === 0) { alert('No checked-out records to export.'); return; }
 
-    // Fetch room prices from Firestore
     const roomSnap = await getDocs(collection(db, 'rooms'));
     const roomMap  = {};
     roomSnap.docs.forEach(d => { roomMap[d.id] = d.data(); });
@@ -278,36 +289,40 @@ const AdminRecentReservations = () => {
     };
 
     const rows = sorted.map(r => {
-      const room     = roomMap[r.roomId];
-      const price    = room?.price ?? 0;
-      const checkIn  = r.checkIn?.toDate  ? r.checkIn.toDate()  : new Date(r.checkIn  || 0);
-      const checkOut = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut || 0);
-      const nights   = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
-      const subtotal = price * nights;
-      const hst      = subtotal * 0.13;
-      const total    = subtotal + hst;
+      const room      = roomMap[r.roomId];
+      const price     = room?.price ?? 0;
+      const checkIn   = r.checkIn?.toDate  ? r.checkIn.toDate()  : new Date(r.checkIn  || 0);
+      const checkOut  = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut || 0);
+      const nights    = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
+      const roomTotal = price * nights;
+      const accomTax  = roomTotal * 0.04;
+      const subTotal  = roomTotal + accomTax;
+      const hst       = subTotal * 0.13;
+      const total     = subTotal + hst;
 
       return {
-        'Guest Name':      r.pname        || '',
-        'Email':           r.email        || '',
-        'Phone':           r.phone        || '',
-        'Room Type':       r.roomName     || '',
-        'Room No.':        r.roomNumber   || '',
-        'Adults':          r.adults       ?? '',
-        'Kids':            r.kids         ?? '',
-        'Check-In':        fmtD(r.checkIn),
-        'Check-Out':       fmtD(r.checkOut),
-        'Checked-Out At':  fmtD(r.checkedOutAt),
-        'Nights':          nights,
-        'Rate/Night ($)':  price,
-        'Subtotal ($)':    parseFloat(subtotal.toFixed(2)),
-        'HST 13% ($)':     parseFloat(hst.toFixed(2)),
-        'Total Paid ($)':  parseFloat(total.toFixed(2)),
+        'Guest Name':           r.pname        || '',
+        'Email':                r.email        || '',
+        'Phone':                r.phone        || '',
+        'Room Type':            r.roomName     || '',
+        'Room No.':             r.roomNumber   || '',
+        'Adults':               r.adults       ?? '',
+        'Kids':                 r.kids         ?? '',
+        'Check-In':             fmtD(r.checkIn),
+        'Check-Out':            fmtD(r.checkOut),
+        'Checked-Out At':       fmtD(r.checkedOutAt),
+        'Nights':               nights,
+        'Rate/Night ($)':       price,
+        'Room Total ($)':       parseFloat(roomTotal.toFixed(2)),
+        'Accom. Tax 4% ($)':    parseFloat(accomTax.toFixed(2)),
+        'Sub Total ($)':        parseFloat(subTotal.toFixed(2)),
+        'HST 13% ($)':          parseFloat(hst.toFixed(2)),
+        'Total Paid ($)':       parseFloat(total.toFixed(2)),
       };
     });
 
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [22, 28, 16, 18, 10, 8, 6, 14, 14, 18, 8, 14, 14, 12, 14].map(w => ({ wch: w }));
+    ws['!cols'] = [22,28,16,18,10,8,6,14,14,18,8,14,14,14,14,12,14].map(w => ({ wch: w }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Checked Out');
     const dateTag = filterFrom && filterTo
@@ -315,9 +330,8 @@ const AdminRecentReservations = () => {
       : `_${new Date().toISOString().slice(0, 10)}`;
     XLSX.writeFile(wb, `checkout_guests${dateTag}.xlsx`);
   };
-  
 
-  // ── Tab config — 4 tabs ────────────────────────────────────────────────────
+  // ── Tab config ─────────────────────────────────────────────────────────────
   const TABS = [
     { id: 'pending',    label: '⏳ Pending',     count: pendingList.length,    activeColor: '#f0c060', activeBg: 'rgba(240,192,96,0.15)'  },
     { id: 'upcoming',   label: '🕐 Upcoming',    count: upcomingList.length,   activeColor: '#60b0f0', activeBg: 'rgba(96,176,240,0.15)'  },
@@ -354,7 +368,6 @@ const AdminRecentReservations = () => {
     );
     if (eff === 'upcoming') return (
       <>
-        {/* Check In button — always visible for upcoming so admin can act any time on/after arrival day */}
         <button
           className="adm-btn"
           style={{ background: 'rgba(80,216,144,0.15)', color: '#50d890', fontWeight: 700, border: '1px solid rgba(80,216,144,0.3)', whiteSpace: 'nowrap' }}
@@ -401,7 +414,6 @@ const AdminRecentReservations = () => {
   const inp = { background: 'var(--ink-3)', border: '1px solid var(--border-2)', borderRadius: 8, padding: '7px 11px', fontSize: 12, fontFamily: 'var(--font-disp)', color: 'var(--text)', outline: 'none' };
   const pageBtnSt = (dis) => ({ padding: '5px 12px', borderRadius: 6, border: '1px solid var(--border-2)', background: 'var(--ink-3)', color: dis ? 'var(--text-3)' : 'var(--text)', cursor: dis ? 'not-allowed' : 'pointer', fontSize: 11, opacity: dis ? 0.5 : 1 });
 
-  // Info text per tab
   const tabInfo = {
     pending:    '⏳ Awaiting admin confirmation. Room is NOT blocked until confirmed.',
     upcoming:   '🕐 Confirmed bookings arriving in future. Room is reserved but NOT yet occupied — click Check In when guest arrives.',
@@ -630,25 +642,90 @@ const AdminRecentReservations = () => {
       {/* ── Receipt Modal ── */}
       {billModal && billDetails && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: 'var(--ink-1)', borderRadius: 16, width: '100%', maxWidth: 420, border: '1px solid var(--border-2)' }}>
+          <div style={{ background: 'var(--ink-1)', borderRadius: 16, width: '100%', maxWidth: 440, border: '1px solid var(--border-2)', maxHeight: '90vh', overflowY: 'auto' }}>
+
+            {/* Modal header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: '1px solid var(--border)' }}>
-              <span style={{ fontWeight: 700, fontSize: 16 }}>Guest Receipt</span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 16 }}>Guest Receipt</div>
+                <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>Good Night Inn · HST# 833074875RT0001</div>
+              </div>
               <button onClick={() => setBillModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-3)', fontSize: 22, cursor: 'pointer' }}>×</button>
             </div>
+
             <div style={{ padding: 24 }}>
-              {[['Guest', billDetails.guest], ['Room', billDetails.roomName], ['Room No.', billDetails.roomNumber], ['Check-in', billDetails.checkIn], ['Check-out', billDetails.checkOut], ['Nights', billDetails.nights], ['Rate/night', `$${billDetails.roomPrice.toFixed(2)}`], ['Subtotal', `$${billDetails.baseAmount.toFixed(2)}`], ['HST (13%)', `$${billDetails.hstAmount.toFixed(2)}`]].map(([label, val]) => (
+
+              {/* Guest / Stay info rows */}
+              {[
+                ['Guest',      billDetails.guest],
+                ['Room Type',  billDetails.roomName],
+                ['Room No.',   billDetails.roomNumber],
+                ['Check-in',   billDetails.checkIn],
+                ['Check-out',  billDetails.checkOut],
+                ['Nights',     billDetails.nights],
+                ['Rate / Night', `$${billDetails.roomPrice.toFixed(2)}`],
+              ].map(([label, val]) => (
                 <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
                   <span style={{ color: 'var(--text-3)' }}>{label}</span>
                   <span style={{ fontWeight: 600 }}>{val}</span>
                 </div>
               ))}
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0 0', fontSize: 16, fontWeight: 700 }}>
-                <span>Total</span>
-                <span style={{ color: 'var(--gold)' }}>${billDetails.totalAmount.toFixed(2)}</span>
+
+              {/* ── Billing breakdown matching physical form ── */}
+              <div style={{ marginTop: 14, borderRadius: 10, border: '1px solid var(--border)', overflow: 'hidden' }}>
+
+                {/* Room Total */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid var(--border)', fontSize: 13, background: 'rgba(255,255,255,0.02)' }}>
+                  <span style={{ color: 'var(--text-3)' }}>Room Total</span>
+                  <span style={{ fontWeight: 600 }}>${billDetails.roomTotal.toFixed(2)}</span>
+                </div>
+
+                {/* Accommodation Tax 4% */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid var(--border)', fontSize: 13, background: 'rgba(255,255,255,0.02)' }}>
+                  <span style={{ color: 'var(--text-3)' }}>Accommodation Tax (4%)</span>
+                  <span style={{ fontWeight: 600 }}>${billDetails.accomTax.toFixed(2)}</span>
+                </div>
+
+                {/* Sub Total */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid var(--border)', fontSize: 13, background: 'rgba(255,255,255,0.04)' }}>
+                  <span style={{ color: 'var(--text-2)', fontWeight: 700 }}>Sub Total</span>
+                  <span style={{ fontWeight: 700 }}>${billDetails.subTotal.toFixed(2)}</span>
+                </div>
+
+                {/* HST 13% */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid var(--border)', fontSize: 13, background: 'rgba(255,255,255,0.02)' }}>
+                  <span style={{ color: 'var(--text-3)' }}>HST (13%)</span>
+                  <span style={{ fontWeight: 600 }}>${billDetails.hstAmount.toFixed(2)}</span>
+                </div>
+
+                {/* Grand Total */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px', background: 'rgba(240,192,96,0.10)', borderTop: '1px solid rgba(240,192,96,0.25)' }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Total (CAD)</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>Includes all taxes</div>
+                  </div>
+                  <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--gold)', fontFamily: 'var(--font-mono)' }}>
+                    ${billDetails.totalAmount.toFixed(2)}
+                  </div>
+                </div>
               </div>
-              <button onClick={sendBill} disabled={sendingEmail} style={{ marginTop: 20, width: '100%', padding: 11, borderRadius: 8, border: 'none', background: 'var(--gold)', color: '#000', fontWeight: 700, cursor: sendingEmail ? 'not-allowed' : 'pointer', fontSize: 14, opacity: sendingEmail ? 0.7 : 1 }}>
-                {sendingEmail ? 'Sending…' : '📧 Email Receipt'}
-              </button>
+
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+                <button
+                  onClick={() => setBillModal(false)}
+                  style={{ flex: 1, padding: 11, borderRadius: 8, border: '1px solid var(--border-2)', background: 'transparent', color: 'var(--text-3)', cursor: 'pointer', fontSize: 13 }}
+                >
+                  Close
+                </button>
+                <button
+                  onClick={sendBill}
+                  disabled={sendingEmail}
+                  style={{ flex: 2, padding: 11, borderRadius: 8, border: 'none', background: 'var(--gold)', color: '#000', fontWeight: 700, cursor: sendingEmail ? 'not-allowed' : 'pointer', fontSize: 14, opacity: sendingEmail ? 0.7 : 1 }}
+                >
+                  {sendingEmail ? 'Sending…' : '📧 Email Receipt to Guest'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
