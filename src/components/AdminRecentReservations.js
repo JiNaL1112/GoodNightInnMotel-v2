@@ -6,6 +6,8 @@ import {
 import { db } from '../config/firebase';
 import { RoomContext } from '../context/RoomContext';
 import emailjs from '@emailjs/browser';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 const AVATAR_COLORS = ['#f0c060','#40e0c8','#f06090','#9080f0','#50d890','#60b0f0'];
 const ROOM_SLOTS = {
@@ -76,6 +78,7 @@ const AdminRecentReservations = () => {
   const [activeTab,      setActiveTab]      = useState('pending');
   const [saving,         setSaving]         = useState(false);
   const [sendingEmail,   setSendingEmail]   = useState(false);
+  const [generatingPdf,  setGeneratingPdf]  = useState(false);
   const [search,         setSearch]         = useState('');
   const [filterRoom,     setFilterRoom]     = useState('');
   const [filterFrom,     setFilterFrom]     = useState('');
@@ -187,6 +190,39 @@ const AdminRecentReservations = () => {
       email:       res.email,
     });
     setBillModal(true);
+  };
+
+  // ── PDF Download ─────────────────────────────────────────────────────────────
+  const handleDownloadPdf = async () => {
+    const el = document.getElementById('receipt-printable');
+    if (!el) return;
+    setGeneratingPdf(true);
+    try {
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+      });
+
+      const imgData   = canvas.toDataURL('image/png');
+      const pdf       = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight= pdf.internal.pageSize.getHeight();
+      const imgWidth  = pageWidth - 20;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const yOffset   = imgHeight < pageHeight ? (pageHeight - imgHeight) / 2 : 10;
+
+      pdf.addImage(imgData, 'PNG', 10, yOffset, imgWidth, imgHeight);
+      const safeName = (billDetails.guest || 'guest').replace(/\s+/g, '_');
+      const dateStr  = new Date().toISOString().slice(0, 10);
+      pdf.save(`receipt_${safeName}_${dateStr}.pdf`);
+    } catch (err) {
+      console.error('PDF generation failed:', err);
+      alert('PDF generation failed. Please try the Print button instead.');
+    } finally {
+      setGeneratingPdf(false);
+    }
   };
 
   const sendBill = async () => {
@@ -606,7 +642,7 @@ const AdminRecentReservations = () => {
         </div>
       )}
 
-      {/* ── Receipt Modal — fully opaque, visible design ── */}
+      {/* ── Receipt Modal ── */}
       {billModal && billDetails && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div style={{
@@ -621,14 +657,23 @@ const AdminRecentReservations = () => {
             fontFamily: "'DM Sans', sans-serif",
           }}>
 
-            {/* ── Blue gradient header ── */}
-            <div style={{
-              background: 'linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)',
-              padding: '22px 24px',
-              borderRadius: '16px 16px 0 0',
-              color: '#fff',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            {/* ── Close button (outside printable area) ── */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px 0' }}>
+              <button
+                onClick={() => setBillModal(false)}
+                style={{ background: '#f1f0ed', border: '1px solid #e5e7eb', color: '#6b7280', width: 32, height: 32, borderRadius: 8, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}
+              >×</button>
+            </div>
+
+            {/* ── Printable area — everything inside this div goes into the PDF ── */}
+            <div id="receipt-printable" style={{ background: '#ffffff', padding: '0 0 4px' }}>
+
+              {/* Blue gradient header */}
+              <div style={{
+                background: 'linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)',
+                padding: '22px 24px',
+                color: '#fff',
+              }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ width: 40, height: 40, background: 'rgba(255,255,255,0.15)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🌙</div>
                   <div>
@@ -636,108 +681,126 @@ const AdminRecentReservations = () => {
                     <div style={{ fontSize: 10, opacity: 0.7, marginTop: 1 }}>HST# 833074875RT0001 · Port Colborne, ON</div>
                   </div>
                 </div>
-                <button
-                  onClick={() => setBillModal(false)}
-                  style={{ background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.35)', color: '#fff', width: 32, height: 32, borderRadius: 8, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >×</button>
+                <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.2)' }}>
+                  <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 }}>Guest Receipt</div>
+                  <div style={{ fontSize: 20, fontWeight: 700 }}>{billDetails.guest}</div>
+                  <div style={{ fontSize: 13, opacity: 0.8, marginTop: 2 }}>{billDetails.roomName} · Room {billDetails.roomNumber}</div>
+                </div>
               </div>
-              <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.2)' }}>
-                <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 }}>Guest Receipt</div>
-                <div style={{ fontSize: 20, fontWeight: 700 }}>{billDetails.guest}</div>
-                <div style={{ fontSize: 13, opacity: 0.8, marginTop: 2 }}>{billDetails.roomName} · Room {billDetails.roomNumber}</div>
+
+              <div style={{ padding: '20px 24px' }}>
+
+                {/* Stay info cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
+                  {[
+                    ['Check-in',   billDetails.checkIn],
+                    ['Check-out',  billDetails.checkOut],
+                    ['Nights',     String(billDetails.nights)],
+                    ['Rate/Night', `$${billDetails.roomPrice.toFixed(2)}`],
+                  ].map(([label, val]) => (
+                    <div key={label} style={{ background: '#f8f7f4', borderRadius: 10, padding: '12px 14px', border: '1px solid #e5e7eb' }}>
+                      <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{label}</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a' }}>{val}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Billing breakdown */}
+                <div style={{ borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden', marginBottom: 20 }}>
+                  <div style={{ background: '#f8f7f4', padding: '9px 16px', borderBottom: '1px solid #e5e7eb' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#6b7280' }}>Billing Summary</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid #f3f4f6', background: '#fff' }}>
+                    <span style={{ fontSize: 13, color: '#374151' }}>
+                      Room Total <span style={{ fontSize: 11, color: '#9ca3af' }}>({billDetails.nights} night{billDetails.nights !== 1 ? 's' : ''} x ${billDetails.roomPrice.toFixed(2)})</span>
+                    </span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>${billDetails.roomTotal.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid #f3f4f6', background: '#fefefe' }}>
+                    <span style={{ fontSize: 13, color: '#374151' }}>Accommodation Tax <span style={{ fontSize: 11, color: '#9ca3af' }}>(4%)</span></span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>${billDetails.accomTax.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid #dbeafe', background: '#eff6ff' }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1e3a5f' }}>Sub Total</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: '#1e3a5f' }}>${billDetails.subTotal.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid #e5e7eb', background: '#fefefe' }}>
+                    <span style={{ fontSize: 13, color: '#374151' }}>HST <span style={{ fontSize: 11, color: '#9ca3af' }}>(13%)</span></span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>${billDetails.hstAmount.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: 'linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)' }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Total (CAD)</div>
+                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 2 }}>All taxes included</div>
+                    </div>
+                    <div style={{ fontSize: 30, fontWeight: 800, color: '#fff', fontFamily: 'monospace', letterSpacing: -1 }}>
+                      ${billDetails.totalAmount.toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer inside printable area */}
+                <div style={{ textAlign: 'center', fontSize: 11, color: '#9ca3af', lineHeight: 1.6 }}>
+                  664 Main St. W, Port Colborne, ON L3K 5V4{'\n'}
+                  1-833-855-1818 · manager@goodnightinn.ca
+                </div>
               </div>
             </div>
+            {/* ── End printable area ── */}
 
-            <div style={{ padding: '20px 24px' }}>
+            {/* ── Action buttons (NOT captured in PDF) ── */}
+            <div style={{ display: 'flex', gap: 8, padding: '14px 24px 20px', borderTop: '1px solid #e5e7eb', flexWrap: 'wrap' }}>
 
-              {/* ── Stay info cards ── */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
-                {[
-                  ['📅 Check-in',   billDetails.checkIn],
-                  ['📅 Check-out',  billDetails.checkOut],
-                  ['🌙 Nights',     String(billDetails.nights)],
-                  ['💵 Rate/Night', `$${billDetails.roomPrice.toFixed(2)}`],
-                ].map(([label, val]) => (
-                  <div key={label} style={{ background: '#f8f7f4', borderRadius: 10, padding: '12px 14px', border: '1px solid #e5e7eb' }}>
-                    <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>{label}</div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a' }}>{val}</div>
-                  </div>
-                ))}
-              </div>
+              {/* Download PDF */}
+              <button
+                onClick={handleDownloadPdf}
+                disabled={generatingPdf}
+                style={{
+                  flex: 1,
+                  padding: '11px 14px',
+                  borderRadius: 10,
+                  border: '1.5px solid #d1d5db',
+                  background: generatingPdf ? '#f1f0ed' : '#f8f7f4',
+                  color: generatingPdf ? '#9ca3af' : '#374151',
+                  cursor: generatingPdf ? 'not-allowed' : 'pointer',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  fontFamily: "'DM Sans', sans-serif",
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  transition: 'all 0.2s',
+                }}
+              >
+                {generatingPdf ? '⏳ Generating…' : '⬇ Download PDF'}
+              </button>
 
-              {/* ── Billing breakdown ── */}
-              <div style={{ borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden', marginBottom: 20 }}>
-
-                {/* Section header */}
-                <div style={{ background: '#f8f7f4', padding: '9px 16px', borderBottom: '1px solid #e5e7eb' }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, color: '#6b7280' }}>Billing Summary</span>
-                </div>
-
-                {/* Room Total */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid #f3f4f6', background: '#fff' }}>
-                  <span style={{ fontSize: 13, color: '#374151' }}>
-                    Room Total <span style={{ fontSize: 11, color: '#9ca3af' }}>({billDetails.nights} night{billDetails.nights !== 1 ? 's' : ''} × ${billDetails.roomPrice.toFixed(2)})</span>
-                  </span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>${billDetails.roomTotal.toFixed(2)}</span>
-                </div>
-
-                {/* Accommodation Tax */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid #f3f4f6', background: '#fefefe' }}>
-                  <span style={{ fontSize: 13, color: '#374151' }}>
-                    Accommodation Tax <span style={{ fontSize: 11, color: '#9ca3af' }}>(4%)</span>
-                  </span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>${billDetails.accomTax.toFixed(2)}</span>
-                </div>
-
-                {/* Sub Total */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid #dbeafe', background: '#eff6ff' }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#1e3a5f' }}>Sub Total</span>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: '#1e3a5f' }}>${billDetails.subTotal.toFixed(2)}</span>
-                </div>
-
-                {/* HST */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px', borderBottom: '1px solid #e5e7eb', background: '#fefefe' }}>
-                  <span style={{ fontSize: 13, color: '#374151' }}>
-                    HST <span style={{ fontSize: 11, color: '#9ca3af' }}>(13%)</span>
-                  </span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>${billDetails.hstAmount.toFixed(2)}</span>
-                </div>
-
-                {/* Grand Total */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: 'linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)' }}>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Total (CAD)</div>
-                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 2 }}>All taxes included</div>
-                  </div>
-                  <div style={{ fontSize: 30, fontWeight: 800, color: '#fff', fontFamily: 'monospace', letterSpacing: -1 }}>
-                    ${billDetails.totalAmount.toFixed(2)}
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Action buttons ── */}
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button
-                  onClick={() => setBillModal(false)}
-                  style={{ flex: 1, padding: '11px 16px', borderRadius: 10, border: '1.5px solid #d1d5db', background: '#fff', color: '#374151', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: "'DM Sans', sans-serif" }}
-                >
-                  Close
-                </button>
-                <button
-                  onClick={sendBill}
-                  disabled={sendingEmail}
-                  style={{ flex: 2, padding: '11px 16px', borderRadius: 10, border: 'none', background: sendingEmail ? '#93c5fd' : '#2563eb', color: '#fff', fontWeight: 700, cursor: sendingEmail ? 'not-allowed' : 'pointer', fontSize: 14, fontFamily: "'DM Sans', sans-serif" }}
-                >
-                  {sendingEmail ? '⏳ Sending…' : '📧 Email Receipt to Guest'}
-                </button>
-              </div>
-
-              {/* ── Footer ── */}
-              <div style={{ marginTop: 14, textAlign: 'center', fontSize: 11, color: '#9ca3af', lineHeight: 1.6 }}>
-                📍 664 Main St. W, Port Colborne, ON L3K 5V4<br />
-                📞 1-833-855-1818 · manager@goodnightinn.ca
-              </div>
+              {/* Email Receipt */}
+              <button
+                onClick={sendBill}
+                disabled={sendingEmail}
+                style={{
+                  flex: 2,
+                  padding: '11px 14px',
+                  borderRadius: 10,
+                  border: 'none',
+                  background: sendingEmail ? '#93c5fd' : '#2563eb',
+                  color: '#fff',
+                  fontWeight: 700,
+                  cursor: sendingEmail ? 'not-allowed' : 'pointer',
+                  fontSize: 13,
+                  fontFamily: "'DM Sans', sans-serif",
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                }}
+              >
+                {sendingEmail ? '⏳ Sending…' : '📧 Email Receipt to Guest'}
+              </button>
             </div>
+
           </div>
         </div>
       )}
