@@ -92,38 +92,67 @@ const GalleryView = () => {
       <ScrollToTop />
 
       {/* ── Banner ── */}
-      <div className="bg-room bg-cover bg-center h-[560px] relative flex justify-center items-center" ref={heroRef}>
-        <div className="absolute w-full h-full bg-black/70" />
-        <div style={{ position: 'relative', zIndex: 20, textAlign: 'center', padding: '0 24px' }}>
-          <div style={{
-            display: 'inline-block',
-            background: 'rgba(255,255,255,0.13)',
-            backdropFilter: 'blur(8px)',
-            color: 'rgba(255,255,255,0.85)',
-            fontSize: '11px', fontWeight: '700',
-            letterSpacing: '2.5px', textTransform: 'uppercase',
-            padding: '5px 16px', borderRadius: '100px',
-            border: '1px solid rgba(255,255,255,0.25)',
-            marginBottom: '18px',
-          }}>
-            Port Colborne, Ontario
-          </div>
+      <div ref={heroRef} style={{
+        background: 'var(--bg-white)',
+        paddingTop: 'calc(var(--nav-h) + 56px)',
+        paddingBottom: '64px',
+        position: 'relative',
+        overflow: 'hidden',
+        textAlign: 'center',
+      }}>
+        {/* Subtle radial background pattern */}
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none',
+          backgroundImage: 'radial-gradient(circle at 60% 40%, rgba(37,99,235,0.06) 0%, transparent 55%), radial-gradient(circle at 25% 75%, rgba(37,99,235,0.04) 0%, transparent 40%)',
+        }} />
+
+        <div style={{ position: 'relative', zIndex: 2, padding: '0 24px' }}>
+          <span className="section-tag">Port Colborne, Ontario</span>
+
           <h1 style={{
             fontFamily: 'var(--font-disp)',
-            fontSize: 'clamp(36px, 6vw, 64px)',
-            fontWeight: '500', color: '#fff', lineHeight: '1.15',
-            marginBottom: '14px', textShadow: '0 2px 20px rgba(0,0,0,0.4)',
+            fontSize: 'clamp(36px, 6vw, 60px)',
+            fontWeight: '500',
+            color: 'var(--text)',
+            lineHeight: '1.15',
+            margin: '12px 0 16px',
           }}>
-            Our Motel Gallery
+            Our Motel <em className="accent-em">Gallery</em>
           </h1>
+
           <p style={{
-            color: 'rgba(255,255,255,0.72)',
-            fontSize: '16px', lineHeight: '1.7',
-            maxWidth: '520px', margin: '0 auto',
+            fontSize: '16px',
+            color: 'var(--text-muted)',
+            lineHeight: '1.75',
+            maxWidth: '500px',
+            margin: '0 auto 28px',
           }}>
             A warm, welcoming place that has hosted guests since 2005 — see for yourself.
           </p>
+
+          {/* Pill row */}
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            {['Real Photos', 'No Filters', 'Updated Regularly'].map(pill => (
+              <span key={pill} style={{
+                background: 'var(--blue-light)',
+                color: 'var(--blue)',
+                border: '1px solid var(--blue-mid)',
+                borderRadius: '100px',
+                fontSize: '12px',
+                fontWeight: '600',
+                padding: '5px 14px',
+              }}>✓ {pill}</span>
+            ))}
+          </div>
         </div>
+
+        {/* Bottom accent line */}
+        <div style={{
+          position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)',
+          width: '80px', height: '3px',
+          background: 'var(--blue)',
+          borderRadius: '2px',
+        }} />
       </div>
 
       {/* ── About Section ── */}

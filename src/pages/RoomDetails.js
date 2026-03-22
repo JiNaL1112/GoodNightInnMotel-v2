@@ -41,10 +41,9 @@ const PLACEHOLDER_SLIDES = [
 const ImageCarousel = ({ images, roomName }) => {
   const [active, setActive]         = useState(0);
   const [prev, setPrev]             = useState(null);
-  const [dir, setDir]               = useState('next'); // 'next' | 'prev'
+  const [dir, setDir]               = useState('next');
   const [animating, setAnimating]   = useState(false);
   const [lightbox, setLightbox]     = useState(false);
-  const [thumbsScroll, setThumbsScroll] = useState(0);
 
   const total = images.length;
 
@@ -60,7 +59,6 @@ const ImageCarousel = ({ images, roomName }) => {
   const goNext = useCallback(() => goTo((active + 1) % total, 'next'),  [active, total, goTo]);
   const goPrev = useCallback(() => goTo((active - 1 + total) % total, 'prev'), [active, total, goTo]);
 
-  /* keyboard nav */
   useEffect(() => {
     const handler = (e) => {
       if (lightbox) {
@@ -73,7 +71,6 @@ const ImageCarousel = ({ images, roomName }) => {
     return () => window.removeEventListener('keydown', handler);
   }, [lightbox, goNext, goPrev]);
 
-  /* touch swipe */
   const touchRef = React.useRef({});
   const onTouchStart = (e) => { touchRef.current.x = e.touches[0].clientX; };
   const onTouchEnd   = (e) => {
@@ -85,7 +82,7 @@ const ImageCarousel = ({ images, roomName }) => {
     let translateX = '100%';
     if (isActive) translateX = '0%';
     else if (isPrev) translateX = dir === 'next' ? '-100%' : '100%';
-    else return null; // don't render other slides at all
+    else return null;
 
     return (
       <div
@@ -116,8 +113,6 @@ const ImageCarousel = ({ images, roomName }) => {
   return (
     <>
       <div style={{ borderRadius: 'var(--radius-lg)', overflow: 'hidden', boxShadow: 'var(--shadow-lg)', background: '#f1f0ed' }}>
-
-        {/* ── Main stage ── */}
         <div
           style={{ position: 'relative', height: '420px', overflow: 'hidden', cursor: 'zoom-in' }}
           onTouchStart={onTouchStart}
@@ -126,20 +121,16 @@ const ImageCarousel = ({ images, roomName }) => {
         >
           {images.map((slide, i) => renderSlide(slide, i, i === active, i === prev))}
 
-          {/* Gradient overlay bottom */}
           <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '35%', background: 'linear-gradient(to top, rgba(0,0,0,0.45), transparent)', pointerEvents: 'none' }} />
 
-          {/* Counter badge */}
           <div style={{ position: 'absolute', top: 14, right: 14, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)', color: '#fff', fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 100, letterSpacing: 1, zIndex: 5, pointerEvents: 'none' }}>
             {String(active + 1).padStart(2, '0')} / {String(total).padStart(2, '0')}
           </div>
 
-          {/* Zoom hint */}
           <div style={{ position: 'absolute', top: 14, left: 14, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)', color: 'rgba(255,255,255,0.8)', fontSize: 10, fontWeight: 600, padding: '4px 10px', borderRadius: 100, letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 4, pointerEvents: 'none' }}>
             🔍 View Full
           </div>
 
-          {/* Prev / Next arrows */}
           {total > 1 && (
             <>
               <button onClick={(e) => { e.stopPropagation(); goPrev(); }} style={arrowBtnStyle('left')}>‹</button>
@@ -147,7 +138,6 @@ const ImageCarousel = ({ images, roomName }) => {
             </>
           )}
 
-          {/* Dot indicators */}
           {total > 1 && (
             <div style={{ position: 'absolute', bottom: 14, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 6, zIndex: 5, pointerEvents: 'none' }}>
               {images.map((_, i) => (
@@ -163,7 +153,6 @@ const ImageCarousel = ({ images, roomName }) => {
           )}
         </div>
 
-        {/* ── Thumbnail strip ── */}
         {total > 1 && (
           <div style={{ display: 'flex', gap: 6, padding: '10px', background: '#fff', overflowX: 'auto' }}>
             {images.map((slide, i) => (
@@ -195,24 +184,20 @@ const ImageCarousel = ({ images, roomName }) => {
         )}
       </div>
 
-      {/* ── Lightbox ── */}
       {lightbox && (
         <div
           onClick={() => setLightbox(false)}
           style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.93)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
-          {/* Close */}
           <button
             onClick={() => setLightbox(false)}
             style={{ position: 'absolute', top: 20, right: 24, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', width: 42, height: 42, borderRadius: '50%', fontSize: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}
           >×</button>
 
-          {/* Counter */}
           <div style={{ position: 'absolute', top: 24, left: '50%', transform: 'translateX(-50%)', color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: 700, letterSpacing: 2 }}>
             {active + 1} / {total}
           </div>
 
-          {/* Arrows */}
           {total > 1 && (
             <>
               <button onClick={(e) => { e.stopPropagation(); goPrev(); }} style={lbArrowStyle('left')}>‹</button>
@@ -220,7 +205,6 @@ const ImageCarousel = ({ images, roomName }) => {
             </>
           )}
 
-          {/* Image */}
           <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '85vh' }}>
             {images[active].type === 'image' ? (
               <img src={images[active].src} alt={roomName} style={{ maxWidth: '90vw', maxHeight: '85vh', objectFit: 'contain', borderRadius: 10, display: 'block' }} />
@@ -232,7 +216,6 @@ const ImageCarousel = ({ images, roomName }) => {
             )}
           </div>
 
-          {/* Thumbnail dots at bottom */}
           <div style={{ position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 8 }}>
             {images.map((_, i) => (
               <button key={i} onClick={(e) => { e.stopPropagation(); goTo(i, i > active ? 'next' : 'prev'); }} style={{ width: i === active ? 28 : 8, height: 8, borderRadius: 4, border: 'none', background: i === active ? '#fff' : 'rgba(255,255,255,0.35)', cursor: 'pointer', transition: 'all 0.3s', padding: 0 }} />
@@ -279,6 +262,134 @@ const lbArrowStyle = (side) => ({
   zIndex: 10,
   transition: 'background 0.2s',
 });
+
+/* ─────────────────────────────────────────────────────────────
+   ROOM HERO BANNER
+───────────────────────────────────────────────────────────── */
+const RoomHeroBanner = ({ name, price }) => {
+  const tagMap = {
+    'Queen Bed':      { label: 'Best Value',    bg: '#dcfce7', color: '#15803d' },
+    'Two Queen Beds': { label: 'Family Fave',   bg: '#dbeafe', color: '#1d4ed8' },
+    'King Bed':       { label: 'Most Spacious', bg: '#fef9c3', color: '#92400e' },
+    'Kitchenette':    { label: 'Extended Stay', bg: '#fce7f3', color: '#9d174d' },
+  };
+  const tag = tagMap[name];
+
+  return (
+    <div style={{
+      background: 'var(--bg-white)',
+      paddingTop: 'calc(var(--nav-h) + 52px)',
+      paddingBottom: '56px',
+      position: 'relative',
+      overflow: 'hidden',
+      textAlign: 'center',
+    }}>
+      {/* Radial background glow */}
+      <div style={{
+        position: 'absolute', inset: 0, pointerEvents: 'none',
+        backgroundImage:
+          'radial-gradient(circle at 65% 35%, rgba(37,99,235,0.06) 0%, transparent 55%), ' +
+          'radial-gradient(circle at 20% 80%, rgba(37,99,235,0.04) 0%, transparent 40%)',
+      }} />
+
+      <div style={{ position: 'relative', zIndex: 2, padding: '0 24px' }}>
+
+        {/* Breadcrumb */}
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          fontSize: '12px',
+          color: 'var(--text-muted)',
+          marginBottom: '16px',
+          fontWeight: '500',
+        }}>
+          <a href="/" style={{ color: 'var(--text-muted)', textDecoration: 'none', transition: 'color 0.2s' }}
+            onMouseEnter={e => e.target.style.color = 'var(--blue)'}
+            onMouseLeave={e => e.target.style.color = 'var(--text-muted)'}
+          >Home</a>
+          <span style={{ color: 'var(--border-mid)' }}>›</span>
+          <a href="/#rooms" style={{ color: 'var(--text-muted)', textDecoration: 'none', transition: 'color 0.2s' }}
+            onMouseEnter={e => e.target.style.color = 'var(--blue)'}
+            onMouseLeave={e => e.target.style.color = 'var(--text-muted)'}
+          >Rooms</a>
+          <span style={{ color: 'var(--border-mid)' }}>›</span>
+          <span style={{ color: 'var(--text)' }}>{name}</span>
+        </div>
+
+        {/* Tag badge */}
+        {tag && (
+          <div style={{ marginBottom: '14px' }}>
+            <span style={{
+              display: 'inline-block',
+              background: tag.bg,
+              color: tag.color,
+              fontSize: '11px',
+              fontWeight: '700',
+              letterSpacing: '1.5px',
+              textTransform: 'uppercase',
+              padding: '5px 14px',
+              borderRadius: '100px',
+            }}>
+              {tag.label}
+            </span>
+          </div>
+        )}
+
+        {/* Room name */}
+        <h1 style={{
+          fontFamily: 'var(--font-disp)',
+          fontSize: 'clamp(34px, 5.5vw, 58px)',
+          fontWeight: '500',
+          color: 'var(--text)',
+          lineHeight: '1.15',
+          margin: '0 0 14px',
+        }}>
+          {name.split(' ').map((word, i, arr) =>
+            i === arr.length - 1
+              ? <em key={i} className="accent-em">{word}</em>
+              : <span key={i}>{word} </span>
+          )}
+        </h1>
+
+        {/* Subtitle */}
+        <p style={{
+          fontSize: '15px',
+          color: 'var(--text-muted)',
+          lineHeight: '1.7',
+          maxWidth: '460px',
+          margin: '0 auto 24px',
+        }}>
+          GoodNight Inn · Port Colborne, ON · Starting from{' '}
+          <strong style={{ color: 'var(--blue)' }}>${price}/night</strong>
+        </p>
+
+        {/* Pill row */}
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+          {['Free WiFi', 'Free Parking', 'Pool Access', 'Daily Housekeeping'].map(pill => (
+            <span key={pill} style={{
+              background: 'var(--blue-light)',
+              color: 'var(--blue)',
+              border: '1px solid var(--blue-mid)',
+              borderRadius: '100px',
+              fontSize: '12px',
+              fontWeight: '600',
+              padding: '5px 14px',
+            }}>✓ {pill}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* Bottom accent line */}
+      <div style={{
+        position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)',
+        width: '80px', height: '3px',
+        background: 'var(--blue)',
+        borderRadius: '2px',
+      }} />
+    </div>
+  );
+};
 
 /* ─────────────────────────────────────────────────────────────
    MAIN PAGE
@@ -333,12 +444,9 @@ const RoomDetails = () => {
 
   /* ── Build the slides array ── */
   const slides = [];
-  // Primary image from Firestore
   if (imageData) slides.push({ type: 'image', src: imageData });
-  // Local static images from data.js (imageLg then image)
   if (localRoom?.imageLg) slides.push({ type: 'image', src: localRoom.imageLg });
   if (localRoom?.image && localRoom?.image !== localRoom?.imageLg) slides.push({ type: 'image', src: localRoom.image });
-  // Fill remaining slots with placeholder cards up to 4 total
   const needed = Math.max(0, 4 - slides.length);
   PLACEHOLDER_SLIDES.slice(0, needed).forEach(p => slides.push({ ...p, type: 'placeholder' }));
 
@@ -346,11 +454,8 @@ const RoomDetails = () => {
     <section>
       <ScrollToTop />
 
-      {/* Hero banner */}
-      <div className="bg-room bg-cover bg-center h-[560px] relative flex justify-center items-center">
-        <div className="absolute w-full h-full bg-black/70" />
-        <h1 className="text-6xl text-white z-20 font-primary text-center">{name} Details</h1>
-      </div>
+      {/* ── Hero Banner ── */}
+      <RoomHeroBanner name={name} price={price} />
 
       <div className="container mx-auto">
         <div style={layoutStyle}>
