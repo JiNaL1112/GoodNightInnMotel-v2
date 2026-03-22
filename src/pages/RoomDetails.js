@@ -238,45 +238,28 @@ const ImageCarousel = ({ images, roomName }) => {
 };
 
 const arrowBtnStyle = (side) => ({
-  position: 'absolute',
-  top: '50%',
-  [side]: 14,
-  transform: 'translateY(-50%)',
-  zIndex: 5,
-  background: 'rgba(255,255,255,0.18)',
-  backdropFilter: 'blur(8px)',
-  border: '1px solid rgba(255,255,255,0.3)',
-  color: '#fff',
-  width: 40, height: 40,
-  borderRadius: '50%',
-  fontSize: 22,
-  cursor: 'pointer',
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  transition: 'background 0.2s',
-  lineHeight: 1,
+  position: 'absolute', top: '50%', [side]: 14,
+  transform: 'translateY(-50%)', zIndex: 5,
+  background: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)',
+  border: '1px solid rgba(255,255,255,0.3)', color: '#fff',
+  width: 40, height: 40, borderRadius: '50%', fontSize: 22,
+  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+  transition: 'background 0.2s', lineHeight: 1,
 });
 
 const lbArrowStyle = (side) => ({
-  position: 'absolute',
-  top: '50%',
-  [side]: 20,
+  position: 'absolute', top: '50%', [side]: 20,
   transform: 'translateY(-50%)',
-  background: 'rgba(255,255,255,0.1)',
-  border: '1px solid rgba(255,255,255,0.25)',
-  color: '#fff',
-  width: 52, height: 52,
-  borderRadius: '50%',
-  fontSize: 28,
-  cursor: 'pointer',
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  zIndex: 10,
-  transition: 'background 0.2s',
+  background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.25)',
+  color: '#fff', width: 52, height: 52, borderRadius: '50%', fontSize: 28,
+  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+  zIndex: 10, transition: 'background 0.2s',
 });
 
 /* ─────────────────────────────────────────────────────────────
    ROOM HERO BANNER
 ───────────────────────────────────────────────────────────── */
-const RoomHeroBanner = ({ name, price }) => {
+const RoomHeroBanner = ({ name, price, isBlocked }) => {
   const tagMap = {
     'Queen Bed':      { label: 'Best Value',    bg: '#dcfce7', color: '#15803d' },
     'Two Queen Beds': { label: 'Family Fave',   bg: '#dbeafe', color: '#1d4ed8' },
@@ -287,39 +270,44 @@ const RoomHeroBanner = ({ name, price }) => {
 
   return (
     <div style={{
-      background: 'var(--bg-white)',
+      background: isBlocked ? '#fff8f8' : 'var(--bg-white)',
       paddingTop: 'calc(var(--nav-h) + 52px)',
       paddingBottom: '56px',
-      position: 'relative',
-      overflow: 'hidden',
-      textAlign: 'center',
+      position: 'relative', overflow: 'hidden', textAlign: 'center',
     }}>
       <div style={{
         position: 'absolute', inset: 0, pointerEvents: 'none',
-        backgroundImage:
-          'radial-gradient(circle at 65% 35%, rgba(37,99,235,0.06) 0%, transparent 55%), ' +
-          'radial-gradient(circle at 20% 80%, rgba(37,99,235,0.04) 0%, transparent 40%)',
+        backgroundImage: isBlocked
+          ? 'radial-gradient(circle at 65% 35%, rgba(220,38,38,0.05) 0%, transparent 55%)'
+          : 'radial-gradient(circle at 65% 35%, rgba(37,99,235,0.06) 0%, transparent 55%), radial-gradient(circle at 20% 80%, rgba(37,99,235,0.04) 0%, transparent 40%)',
       }} />
 
       <div style={{ position: 'relative', zIndex: 2, padding: '0 24px' }}>
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: '6px',
-          fontSize: '12px', color: 'var(--text-muted)', marginBottom: '16px', fontWeight: '500',
-        }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '16px', fontWeight: '500' }}>
           <a href="/" style={{ color: 'var(--text-muted)', textDecoration: 'none', transition: 'color 0.2s' }}
             onMouseEnter={e => e.target.style.color = 'var(--blue)'}
-            onMouseLeave={e => e.target.style.color = 'var(--text-muted)'}
-          >Home</a>
+            onMouseLeave={e => e.target.style.color = 'var(--text-muted)'}>Home</a>
           <span style={{ color: 'var(--border-mid)' }}>›</span>
           <a href="/#rooms" style={{ color: 'var(--text-muted)', textDecoration: 'none', transition: 'color 0.2s' }}
             onMouseEnter={e => e.target.style.color = 'var(--blue)'}
-            onMouseLeave={e => e.target.style.color = 'var(--text-muted)'}
-          >Rooms</a>
+            onMouseLeave={e => e.target.style.color = 'var(--text-muted)'}>Rooms</a>
           <span style={{ color: 'var(--border-mid)' }}>›</span>
           <span style={{ color: 'var(--text)' }}>{name}</span>
         </div>
 
-        {tag && (
+        {/* Show "Unavailable" badge if blocked, otherwise normal tag */}
+        {isBlocked ? (
+          <div style={{ marginBottom: '14px' }}>
+            <span style={{
+              display: 'inline-block', background: '#fef2f2', color: '#dc2626',
+              fontSize: '11px', fontWeight: '700', letterSpacing: '1.5px',
+              textTransform: 'uppercase', padding: '5px 14px', borderRadius: '100px',
+              border: '1px solid #fecaca',
+            }}>
+              🚫 Currently Unavailable
+            </span>
+          </div>
+        ) : tag && (
           <div style={{ marginBottom: '14px' }}>
             <span style={{
               display: 'inline-block', background: tag.bg, color: tag.color,
@@ -333,37 +321,40 @@ const RoomHeroBanner = ({ name, price }) => {
 
         <h1 style={{
           fontFamily: 'var(--font-disp)', fontSize: 'clamp(34px, 5.5vw, 58px)',
-          fontWeight: '500', color: 'var(--text)', lineHeight: '1.15', margin: '0 0 14px',
+          fontWeight: '500', color: isBlocked ? '#dc2626' : 'var(--text)', lineHeight: '1.15', margin: '0 0 14px',
         }}>
           {name.split(' ').map((word, i, arr) =>
             i === arr.length - 1
-              ? <em key={i} className="accent-em">{word}</em>
+              ? <em key={i} style={{ fontStyle: 'italic', color: isBlocked ? '#dc2626' : 'var(--blue)' }}>{word}</em>
               : <span key={i}>{word} </span>
           )}
         </h1>
 
-        <p style={{
-          fontSize: '15px', color: 'var(--text-muted)', lineHeight: '1.7',
-          maxWidth: '460px', margin: '0 auto 24px',
-        }}>
-          GoodNight Inn · Port Colborne, ON · Starting from{' '}
-          <strong style={{ color: 'var(--blue)' }}>${price}/night</strong>
+        <p style={{ fontSize: '15px', color: 'var(--text-muted)', lineHeight: '1.7', maxWidth: '460px', margin: '0 auto 24px' }}>
+          {isBlocked
+            ? 'This room is currently not available for booking. Please contact us for availability or check our other rooms.'
+            : <>GoodNight Inn · Port Colborne, ON · Starting from <strong style={{ color: 'var(--blue)' }}>${price}/night</strong></>
+          }
         </p>
 
-        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
-          {['Free WiFi', 'Free Parking', 'Pool Access', 'Daily Housekeeping'].map(pill => (
-            <span key={pill} style={{
-              background: 'var(--blue-light)', color: 'var(--blue)',
-              border: '1px solid var(--blue-mid)', borderRadius: '100px',
-              fontSize: '12px', fontWeight: '600', padding: '5px 14px',
-            }}>✓ {pill}</span>
-          ))}
-        </div>
+        {!isBlocked && (
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            {['Free WiFi', 'Free Parking', 'Pool Access', 'Daily Housekeeping'].map(pill => (
+              <span key={pill} style={{
+                background: 'var(--blue-light)', color: 'var(--blue)',
+                border: '1px solid var(--blue-mid)', borderRadius: '100px',
+                fontSize: '12px', fontWeight: '600', padding: '5px 14px',
+              }}>✓ {pill}</span>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={{
         position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)',
-        width: '80px', height: '3px', background: 'var(--blue)', borderRadius: '2px',
+        width: '80px', height: '3px',
+        background: isBlocked ? '#dc2626' : 'var(--blue)',
+        borderRadius: '2px',
       }} />
     </div>
   );
@@ -398,40 +389,32 @@ const RoomDetails = () => {
 
   const { id } = useParams();
   const room = rooms.find(room => room.id.toString() === id);
+  const isBlocked = !!room?.blocked;
 
   // ── Gallery images fetched from Firestore ─────────────────────────────────
-  const [gallerySlides, setGallerySlides] = useState(null); // null = loading
+  const [gallerySlides, setGallerySlides] = useState(null);
 
   useEffect(() => {
     if (!room) return;
-
     const prefix = ROOM_PREFIX[room.name];
-
     const fetchGallery = async () => {
       try {
         const snap = await getDocs(collection(db, 'gallery'));
         const all  = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-        // Filter by prefix (case-insensitive)
         const matched = prefix
-          ? all.filter(img =>
-              (img.name || '').toLowerCase().startsWith(prefix.toLowerCase())
-            )
+          ? all.filter(img => (img.name || '').toLowerCase().startsWith(prefix.toLowerCase()))
           : [];
-
         if (matched.length > 0) {
-          // Sort by name so q-001, q-002 … come out in order
           matched.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
           setGallerySlides(matched.map(img => ({ type: 'image', src: img.base64 })));
         } else {
-          setGallerySlides([]); // no gallery images → fall back to placeholders
+          setGallerySlides([]);
         }
       } catch (err) {
         console.error('Gallery fetch error:', err);
-        setGallerySlides([]); // on error, fall back to placeholders
+        setGallerySlides([]);
       }
     };
-
     fetchGallery();
   }, [room]);
 
@@ -445,9 +428,7 @@ const RoomDetails = () => {
   if (!room) {
     return (
       <section style={{ padding: '96px 0', textAlign: 'center' }}>
-        <h2 style={{ fontFamily: 'var(--font-disp)', fontSize: '32px', marginBottom: '12px' }}>
-          Room Not Found
-        </h2>
+        <h2 style={{ fontFamily: 'var(--font-disp)', fontSize: '32px', marginBottom: '12px' }}>Room Not Found</h2>
         <p style={{ color: 'var(--text-muted)' }}>We couldn't find the room you're looking for.</p>
       </section>
     );
@@ -456,28 +437,16 @@ const RoomDetails = () => {
   const { name, description, imageData, price } = room;
   const localRoom = roomData.find((r) => r.name === name) || roomData[0];
 
-  /* ── Build slides array ──────────────────────────────────────────────────
-     Priority:
-       1. Gallery images from Firestore (filtered by prefix)
-       2. Room imageData (admin-uploaded photo on the room doc)
-       3. Local static images from data.js
-       4. Placeholder slides (fallback)
-  ── */
   let slides = [];
-
   if (gallerySlides === null) {
-    // Still loading — show a single loading placeholder
     slides = [{ type: 'placeholder', emoji: '⏳', bg: 'linear-gradient(135deg,#f1f5f9 0%,#e2e8f0 100%)', label: 'Loading photos…' }];
   } else if (gallerySlides.length > 0) {
-    // Use gallery images (already sorted)
     slides = gallerySlides;
   } else {
-    // Fall back: room imageData → local static images → placeholders
     if (imageData) slides.push({ type: 'image', src: imageData });
     if (localRoom?.imageLg) slides.push({ type: 'image', src: localRoom.imageLg });
     if (localRoom?.image && localRoom.image !== localRoom.imageLg)
       slides.push({ type: 'image', src: localRoom.image });
-
     const needed = Math.max(0, 4 - slides.length);
     PLACEHOLDER_SLIDES.slice(0, needed).forEach(p => slides.push({ ...p, type: 'placeholder' }));
   }
@@ -486,8 +455,8 @@ const RoomDetails = () => {
     <section>
       <ScrollToTop />
 
-      {/* ── Hero Banner ── */}
-      <RoomHeroBanner name={name} price={price} />
+      {/* ── Hero Banner — pass isBlocked ── */}
+      <RoomHeroBanner name={name} price={price} isBlocked={isBlocked} />
 
       <div className="container mx-auto">
         <div style={layoutStyle}>
@@ -501,21 +470,18 @@ const RoomDetails = () => {
               <p style={roomDescStyle}>{description}</p>
             </div>
 
-            {/* ── IMAGE CAROUSEL ── */}
-            <ImageCarousel images={slides} roomName={name} />
+            {/* ── IMAGE CAROUSEL (slightly greyed out if blocked) ── */}
+            <div style={{ opacity: isBlocked ? 0.7 : 1, filter: isBlocked ? 'grayscale(30%)' : 'none' }}>
+              <ImageCarousel images={slides} roomName={name} />
+            </div>
 
             {/* Facilities */}
             <div style={{ marginTop: '44px' }}>
               <span className="section-tag">What's Included</span>
-              <h3 style={sectionHeadStyle}>
-                Room <em className="accent-em">Facilities</em>
-              </h3>
+              <h3 style={sectionHeadStyle}>Room <em className="accent-em">Facilities</em></h3>
               <div style={facilitiesGridStyle}>
                 {facilitiesConfig.map((f) => (
-                  <div
-                    key={f.name}
-                    style={{ ...facilityCardStyle, background: f.color, border: `1.5px solid ${f.border}` }}
-                  >
+                  <div key={f.name} style={{ ...facilityCardStyle, background: f.color, border: `1.5px solid ${f.border}` }}>
                     <div style={{ ...facilityIconWrapStyle, color: f.iconColor }}>{f.icon}</div>
                     <span style={facilityNameStyle}>{f.name}</span>
                   </div>
@@ -527,155 +493,192 @@ const RoomDetails = () => {
           {/* ── RIGHT COLUMN ── */}
           <div style={rightColStyle}>
 
-            {/* Booking form */}
-            <div style={formCardStyle}>
-
-              <div style={formHeaderStyle}>
-                <div>
-                  <div style={formBadgeStyle}>Reserve Your Stay</div>
-                  <div style={formPriceRowStyle}>
-                    <span style={formPriceStyle}>${price}</span>
-                    <span style={formPricePerStyle}>/night</span>
-                  </div>
+            {/* ── BLOCKED: show unavailability notice instead of booking form ── */}
+            {isBlocked ? (
+              <div style={{
+                background: '#fff8f8',
+                border: '2px solid #fca5a5',
+                borderRadius: 'var(--radius-lg)',
+                padding: '36px 28px',
+                textAlign: 'center',
+                boxShadow: 'var(--shadow-md)',
+              }}>
+                <div style={{ fontSize: '52px', marginBottom: '16px' }}>🚫</div>
+                <h3 style={{
+                  fontFamily: 'var(--font-disp)', fontSize: '22px', fontWeight: '500',
+                  color: '#dc2626', marginBottom: '12px',
+                }}>
+                  Room Not Available
+                </h3>
+                <p style={{ fontSize: '14px', color: '#6b7280', lineHeight: '1.75', marginBottom: '24px' }}>
+                  This room is currently blocked for booking. It may be undergoing maintenance or temporarily unavailable.
+                </p>
+                <p style={{ fontSize: '13px', color: '#9ca3af', marginBottom: '28px' }}>
+                  Please contact us directly or browse our other available rooms.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <a href="/#rooms" style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'var(--blue)', color: '#fff', padding: '13px 20px',
+                    borderRadius: 'var(--radius)', fontSize: '14px', fontWeight: '600',
+                    textDecoration: 'none', transition: 'background 0.2s',
+                    fontFamily: 'var(--font-body)',
+                  }}>
+                    Browse Available Rooms →
+                  </a>
+                  <a href="tel:+18338551818" style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    padding: '11px 20px', borderRadius: 'var(--radius)',
+                    border: '2px solid var(--border-mid)', fontSize: '14px', fontWeight: '600',
+                    color: 'var(--text)', fontFamily: 'var(--font-body)', textDecoration: 'none',
+                  }}>
+                    📞 Call Us: 1-833-855-1818
+                  </a>
                 </div>
-                <div style={formRatingStyle}>⭐ 4.9</div>
               </div>
+            ) : (
+              /* ── NORMAL: full booking form ── */
+              <div style={formCardStyle}>
 
-              <div style={formDividerStyle} />
-
-              <div style={formBodyStyle}>
-
-                {/* Personal Info */}
-                <div style={sectionLabelStyle}>👤 Personal Information</div>
-
-                <div style={fieldGroupStyle}>
-                  <label style={labelStyle}>Full Name *</label>
-                  <input type="text" placeholder="Your name" value={pname}
-                    onChange={(e) => setPName(e.target.value)} style={inputStyle} />
+                <div style={formHeaderStyle}>
+                  <div>
+                    <div style={formBadgeStyle}>Reserve Your Stay</div>
+                    <div style={formPriceRowStyle}>
+                      <span style={formPriceStyle}>${price}</span>
+                      <span style={formPricePerStyle}>/night</span>
+                    </div>
+                  </div>
+                  <div style={formRatingStyle}>⭐ 4.9</div>
                 </div>
 
-                <div style={twoColStyle}>
+                <div style={formDividerStyle} />
+
+                <div style={formBodyStyle}>
+
+                  <div style={sectionLabelStyle}>👤 Personal Information</div>
+
                   <div style={fieldGroupStyle}>
-                    <label style={labelStyle}>Email *</label>
-                    <input type="email" placeholder="you@example.com" value={email}
-                      onChange={(e) => setEmail(e.target.value)} style={inputStyle} />
+                    <label style={labelStyle}>Full Name *</label>
+                    <input type="text" placeholder="Your name" value={pname}
+                      onChange={(e) => setPName(e.target.value)} style={inputStyle} />
                   </div>
+
+                  <div style={twoColStyle}>
+                    <div style={fieldGroupStyle}>
+                      <label style={labelStyle}>Email *</label>
+                      <input type="email" placeholder="you@example.com" value={email}
+                        onChange={(e) => setEmail(e.target.value)} style={inputStyle} />
+                    </div>
+                    <div style={fieldGroupStyle}>
+                      <label style={labelStyle}>Phone *</label>
+                      <input type="tel" placeholder="+1 (000) 000-0000" value={phone}
+                        onChange={(e) => setPhone(e.target.value)} style={inputStyle} />
+                    </div>
+                  </div>
+
                   <div style={fieldGroupStyle}>
-                    <label style={labelStyle}>Phone *</label>
-                    <input type="tel" placeholder="+1 (000) 000-0000" value={phone}
-                      onChange={(e) => setPhone(e.target.value)} style={inputStyle} />
+                    <label style={labelStyle}>Address</label>
+                    <input type="text" placeholder="Street address" value={address}
+                      onChange={(e) => setAddress(e.target.value)} style={inputStyle} />
                   </div>
+
+                  <div style={twoColStyle}>
+                    <div style={fieldGroupStyle}>
+                      <label style={labelStyle}>City</label>
+                      <input type="text" placeholder="City" value={city}
+                        onChange={(e) => setCity(e.target.value)} style={inputStyle} />
+                    </div>
+                    <div style={fieldGroupStyle}>
+                      <label style={labelStyle}>Province / State</label>
+                      <input type="text" placeholder="ON" value={province}
+                        onChange={(e) => setProvince(e.target.value)} style={inputStyle} />
+                    </div>
+                  </div>
+
+                  <div style={twoColStyle}>
+                    <div style={fieldGroupStyle}>
+                      <label style={labelStyle}>Country</label>
+                      <input type="text" placeholder="Canada" value={country}
+                        onChange={(e) => setCountry(e.target.value)} style={inputStyle} />
+                    </div>
+                    <div style={fieldGroupStyle}>
+                      <label style={labelStyle}>Postal / Zip Code</label>
+                      <input type="text" placeholder="L3K 5V4" value={postalCode}
+                        onChange={(e) => setPostalCode(e.target.value)} style={inputStyle} />
+                    </div>
+                  </div>
+
+                  <div style={fieldGroupStyle}>
+                    <label style={labelStyle}>Company (optional)</label>
+                    <input type="text" placeholder="Company name" value={company}
+                      onChange={(e) => setCompany(e.target.value)} style={inputStyle} />
+                  </div>
+
+                  <div style={{ ...sectionLabelStyle, marginTop: '8px' }}>🪪 Identification & Vehicle</div>
+
+                  <div style={twoColStyle}>
+                    <div style={fieldGroupStyle}>
+                      <label style={labelStyle}>Driver's Licence No.</label>
+                      <input type="text" placeholder="Licence number" value={driverLicNo}
+                        onChange={(e) => setDriverLicNo(e.target.value)} style={inputStyle} />
+                    </div>
+                    <div style={fieldGroupStyle}>
+                      <label style={labelStyle}>Date of Birth</label>
+                      <input type="date" value={dob}
+                        onChange={(e) => setDob(e.target.value)} style={inputStyle} />
+                    </div>
+                  </div>
+
+                  <div style={fieldGroupStyle}>
+                    <label style={labelStyle}>Vehicle Plate #</label>
+                    <input type="text" placeholder="ABC 1234" value={plateNumber}
+                      onChange={(e) => setPlateNumber(e.target.value)} style={inputStyle} />
+                  </div>
+
+                  <div style={{ ...sectionLabelStyle, marginTop: '8px' }}>🛏️ Stay Details</div>
+
+                  <div style={twoColStyle}>
+                    <div style={fieldGroupStyle}>
+                      <label style={labelStyle}>Check In</label>
+                      <div style={datePickerWrapStyle}><CheckIn /></div>
+                    </div>
+                    <div style={fieldGroupStyle}>
+                      <label style={labelStyle}>Check Out</label>
+                      <div style={datePickerWrapStyle}><CheckOut /></div>
+                    </div>
+                  </div>
+
+                  <div style={twoColStyle}>
+                    <div style={fieldGroupStyle}>
+                      <label style={labelStyle}>Adults</label>
+                      <div style={dropdownWrapStyle}><AdultsDropdown /></div>
+                    </div>
+                    <div style={fieldGroupStyle}>
+                      <label style={labelStyle}>Kids</label>
+                      <div style={dropdownWrapStyle}><KidsDropdown /></div>
+                    </div>
+                  </div>
+
                 </div>
 
-                <div style={fieldGroupStyle}>
-                  <label style={labelStyle}>Address</label>
-                  <input type="text" placeholder="Street address" value={address}
-                    onChange={(e) => setAddress(e.target.value)} style={inputStyle} />
+                <div style={formFooterStyle}>
+                  <button onClick={handleReservation} className="btn-primary" style={bookBtnStyle}>
+                    Book Now — ${price}/night
+                  </button>
+                  <a href="tel:+18338551818" style={callBtnStyle}>📞 Call to Reserve</a>
                 </div>
 
-                <div style={twoColStyle}>
-                  <div style={fieldGroupStyle}>
-                    <label style={labelStyle}>City</label>
-                    <input type="text" placeholder="City" value={city}
-                      onChange={(e) => setCity(e.target.value)} style={inputStyle} />
-                  </div>
-                  <div style={fieldGroupStyle}>
-                    <label style={labelStyle}>Province / State</label>
-                    <input type="text" placeholder="ON" value={province}
-                      onChange={(e) => setProvince(e.target.value)} style={inputStyle} />
-                  </div>
+                <div style={trustRowStyle}>
+                  {['Free Cancellation', 'No Hidden Fees', 'Instant Confirm'].map(t => (
+                    <span key={t} style={trustPillStyle}>✓ {t}</span>
+                  ))}
                 </div>
-
-                <div style={twoColStyle}>
-                  <div style={fieldGroupStyle}>
-                    <label style={labelStyle}>Country</label>
-                    <input type="text" placeholder="Canada" value={country}
-                      onChange={(e) => setCountry(e.target.value)} style={inputStyle} />
-                  </div>
-                  <div style={fieldGroupStyle}>
-                    <label style={labelStyle}>Postal / Zip Code</label>
-                    <input type="text" placeholder="L3K 5V4" value={postalCode}
-                      onChange={(e) => setPostalCode(e.target.value)} style={inputStyle} />
-                  </div>
-                </div>
-
-                <div style={fieldGroupStyle}>
-                  <label style={labelStyle}>Company (optional)</label>
-                  <input type="text" placeholder="Company name" value={company}
-                    onChange={(e) => setCompany(e.target.value)} style={inputStyle} />
-                </div>
-
-                {/* ID & Vehicle */}
-                <div style={{ ...sectionLabelStyle, marginTop: '8px' }}>🪪 Identification & Vehicle</div>
-
-                <div style={twoColStyle}>
-                  <div style={fieldGroupStyle}>
-                    <label style={labelStyle}>Driver's Licence No.</label>
-                    <input type="text" placeholder="Licence number" value={driverLicNo}
-                      onChange={(e) => setDriverLicNo(e.target.value)} style={inputStyle} />
-                  </div>
-                  <div style={fieldGroupStyle}>
-                    <label style={labelStyle}>Date of Birth</label>
-                    <input type="date" value={dob}
-                      onChange={(e) => setDob(e.target.value)} style={inputStyle} />
-                  </div>
-                </div>
-
-                <div style={fieldGroupStyle}>
-                  <label style={labelStyle}>Vehicle Plate #</label>
-                  <input type="text" placeholder="ABC 1234" value={plateNumber}
-                    onChange={(e) => setPlateNumber(e.target.value)} style={inputStyle} />
-                </div>
-
-                {/* Stay Details */}
-                <div style={{ ...sectionLabelStyle, marginTop: '8px' }}>🛏️ Stay Details</div>
-
-                <div style={twoColStyle}>
-                  <div style={fieldGroupStyle}>
-                    <label style={labelStyle}>Check In</label>
-                    <div style={datePickerWrapStyle}><CheckIn /></div>
-                  </div>
-                  <div style={fieldGroupStyle}>
-                    <label style={labelStyle}>Check Out</label>
-                    <div style={datePickerWrapStyle}><CheckOut /></div>
-                  </div>
-                </div>
-
-                <div style={twoColStyle}>
-                  <div style={fieldGroupStyle}>
-                    <label style={labelStyle}>Adults</label>
-                    <div style={dropdownWrapStyle}><AdultsDropdown /></div>
-                  </div>
-                  <div style={fieldGroupStyle}>
-                    <label style={labelStyle}>Kids</label>
-                    <div style={dropdownWrapStyle}><KidsDropdown /></div>
-                  </div>
-                </div>
-
               </div>
+            )}
 
-              {/* CTA */}
-              <div style={formFooterStyle}>
-                <button onClick={handleReservation} className="btn-primary" style={bookBtnStyle}>
-                  Book Now — ${price}/night
-                </button>
-                <a href="tel:+18338551818" style={callBtnStyle}>
-                  📞 Call to Reserve
-                </a>
-              </div>
-
-              <div style={trustRowStyle}>
-                {['Free Cancellation', 'No Hidden Fees', 'Instant Confirm'].map(t => (
-                  <span key={t} style={trustPillStyle}>✓ {t}</span>
-                ))}
-              </div>
-            </div>
-
-            {/* Hotel Rules */}
+            {/* Hotel Rules — always visible */}
             <div style={rulesCardStyle}>
-              <h3 style={sectionHeadStyle}>
-                Hotel <em className="accent-em">Rules</em>
-              </h3>
+              <h3 style={sectionHeadStyle}>Hotel <em className="accent-em">Rules</em></h3>
               <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                 {rules.map((rule) => (
                   <li key={rule} style={ruleItemStyle}>

@@ -27,6 +27,7 @@ const Rooms = () => {
   const [uploading,       setUploading]       = useState(false);
   const [savedRoom,       setSavedRoom]       = useState(null);
   const [deletingRoom,    setDeletingRoom]    = useState(null);
+  const [togglingRoom,    setTogglingRoom]    = useState(null); // NEW
   const [showAddModal,    setShowAddModal]    = useState(false);
   const [newRoom,         setNewRoom]         = useState(EMPTY_ROOM);
   const [newRoomImage,    setNewRoomImage]    = useState(null);
@@ -73,6 +74,21 @@ const Rooms = () => {
     setUploading(false);
   };
 
+  // ── NEW: Toggle block/unblock room ───────────────────────────────────────
+  const handleToggleBlock = async (roomId, currentlyBlocked) => {
+    setTogglingRoom(roomId);
+    try {
+      await updateDoc(doc(db, 'rooms', roomId), {
+        blocked: !currentlyBlocked,
+      });
+      await fetchRooms();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update room availability');
+    }
+    setTogglingRoom(null);
+  };
+
   // ── Delete room ───────────────────────────────────────────────────────────
   const handleDelete = async (roomId, roomName) => {
     if (!window.confirm(`Are you sure you want to delete "${roomName}"? This cannot be undone.`)) return;
@@ -103,6 +119,7 @@ const Rooms = () => {
         maxPerson:   Number(newRoom.maxPerson) || 2,
         description: newRoom.description.trim(),
         facilities:  DEFAULT_FACILITIES.map(f => ({ name: f })),
+        blocked:     false, // NEW: default unblocked
         createdAt:   new Date(),
       };
       if (newRoomImage) {
@@ -269,6 +286,7 @@ const Rooms = () => {
           position: relative;
         }
         .rm-card:hover { box-shadow: 0 6px 24px rgba(0,0,0,0.10); border-color: #d1d5db; }
+        .rm-card.blocked-card { border-color: #fca5a5; background: #fff7f7; }
         .rm-card-inner {
           display: grid;
           grid-template-columns: 280px 1fr;
@@ -276,11 +294,69 @@ const Rooms = () => {
           padding: 24px;
         }
 
-        /* ── Delete button on card ── */
-        .rm-delete-btn {
+        /* ── Action buttons row on card top-right ── */
+        .rm-card-actions {
           position: absolute;
           top: 16px;
           right: 16px;
+          display: flex;
+          gap: 8px;
+          z-index: 10;
+        }
+
+        /* ── Block/Unblock Button ── */
+        .rm-block-btn {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          border-radius: 8px;
+          padding: 6px 14px;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          font-family: 'DM Sans', sans-serif;
+          transition: background 0.2s, border-color 0.2s, transform 0.15s;
+          border: 1.5px solid;
+        }
+        .rm-block-btn.is-unblocked {
+          background: #fff7ed;
+          border-color: #fed7aa;
+          color: #c2410c;
+        }
+        .rm-block-btn.is-unblocked:hover:not(:disabled) {
+          background: #c2410c;
+          color: #fff;
+          border-color: #c2410c;
+          transform: translateY(-1px);
+        }
+        .rm-block-btn.is-blocked {
+          background: #f0fdf4;
+          border-color: #bbf7d0;
+          color: #15803d;
+        }
+        .rm-block-btn.is-blocked:hover:not(:disabled) {
+          background: #15803d;
+          color: #fff;
+          border-color: #15803d;
+          transform: translateY(-1px);
+        }
+        .rm-block-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* ── Blocked banner on card ── */
+        .rm-blocked-banner {
+          background: #fef2f2;
+          border-top: 1.5px dashed #fca5a5;
+          padding: 10px 24px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 13px;
+          font-weight: 600;
+          color: #dc2626;
+        }
+
+        /* ── Delete button on card ── */
+        .rm-delete-btn {
           display: flex;
           align-items: center;
           gap: 6px;
@@ -294,7 +370,6 @@ const Rooms = () => {
           cursor: pointer;
           font-family: 'DM Sans', sans-serif;
           transition: background 0.2s, border-color 0.2s, transform 0.15s;
-          z-index: 10;
         }
         .rm-delete-btn:hover:not(:disabled) {
           background: #dc2626;
@@ -325,7 +400,7 @@ const Rooms = () => {
         }
 
         /* ── Room fields ── */
-        .rm-room-title { font-size: 20px; font-weight: 700; color: #1a1a1a; margin-bottom: 6px; padding-right: 120px; }
+        .rm-room-title { font-size: 20px; font-weight: 700; color: #1a1a1a; margin-bottom: 6px; padding-right: 220px; }
         .rm-room-meta  { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
         .rm-meta-pill  {
           background: #f1f0ed;
@@ -335,6 +410,12 @@ const Rooms = () => {
           font-size: 12px;
           color: #374151;
           font-family: 'JetBrains Mono', monospace;
+        }
+        .rm-meta-pill.blocked-pill {
+          background: #fef2f2;
+          border-color: #fecaca;
+          color: #dc2626;
+          font-weight: 700;
         }
         .rm-label {
           font-size: 11px;
@@ -513,9 +594,7 @@ const Rooms = () => {
           transform: translateY(-1px);
         }
         .rm-modal-submit:disabled { opacity: 0.55; cursor: not-allowed; }
-        .rm-modal-submit.success {
-          background: #16a34a;
-        }
+        .rm-modal-submit.success { background: #16a34a; }
         .rm-section-divider {
           font-size: 10px;
           font-weight: 700;
@@ -534,8 +613,10 @@ const Rooms = () => {
           .rm-card-inner { grid-template-columns: 1fr; }
           .rm-modal-row { grid-template-columns: 1fr; }
           .rm-page-head { flex-direction: column; align-items: flex-start; }
-          .rm-delete-btn { position: static; margin-bottom: 12px; }
+          .rm-card-actions { position: static; margin-bottom: 12px; flex-wrap: wrap; }
+          .rm-room-title { padding-right: 0; }
         }
+        @keyframes rm-spin { to { transform: rotate(360deg); } }
       `}</style>
 
       <div className="rm-shell">
@@ -567,11 +648,7 @@ const Rooms = () => {
               { href: '/admin/rooms',             icon: '🏨', label: 'Rooms', active: true },
               { href: '/admin/picturemanagement', icon: '🖼️', label: 'Pictures'     },
             ].map(n => (
-              <a
-                key={n.href}
-                href={n.href}
-                className={`rm-nav-item ${n.active ? 'active' : ''}`}
-              >
+              <a key={n.href} href={n.href} className={`rm-nav-item ${n.active ? 'active' : ''}`}>
                 <span style={{ fontSize: 16, width: 20, textAlign: 'center' }}>{n.icon}</span>
                 {n.label}
               </a>
@@ -589,7 +666,7 @@ const Rooms = () => {
                 <div className="rm-page-tag">Admin Management</div>
                 <h1 className="rm-page-title">Manage Rooms</h1>
                 <div className="rm-page-sub">
-                  Update room details, prices, photos — or add / remove rooms.
+                  Update room details, prices, photos — or block rooms to hide them from guests.
                 </div>
               </div>
               <button className="rm-add-btn" onClick={() => setShowAddModal(true)}>
@@ -604,104 +681,140 @@ const Rooms = () => {
               </div>
             )}
 
-            {rooms.map(room => (
-              <div key={room.id} className="rm-card">
+            {rooms.map(room => {
+              const isBlocked = !!room.blocked;
+              return (
+                <div key={room.id} className={`rm-card ${isBlocked ? 'blocked-card' : ''}`}>
 
-                {/* ── Delete button ── */}
-                <button
-                  className="rm-delete-btn"
-                  disabled={deletingRoom === room.id}
-                  onClick={() => handleDelete(room.id, room.name)}
-                  title="Delete this room"
-                >
-                  {deletingRoom === room.id ? (
-                    <>
-                      <span style={{ display: 'inline-block', width: 12, height: 12, border: '2px solid #fca5a5', borderTopColor: '#dc2626', borderRadius: '50%', animation: 'rm-spin 0.7s linear infinite' }} />
-                      Deleting…
-                    </>
-                  ) : (
-                    <>🗑 Delete</>
+                  {/* ── Action buttons (top-right) ── */}
+                  <div className="rm-card-actions">
+                    {/* Block / Unblock */}
+                    <button
+                      className={`rm-block-btn ${isBlocked ? 'is-blocked' : 'is-unblocked'}`}
+                      disabled={togglingRoom === room.id}
+                      onClick={() => handleToggleBlock(room.id, isBlocked)}
+                      title={isBlocked ? 'Make this room available to guests' : 'Block this room from guests'}
+                    >
+                      {togglingRoom === room.id ? (
+                        <>
+                          <span style={{ display: 'inline-block', width: 11, height: 11, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'rm-spin 0.7s linear infinite' }} />
+                          {isBlocked ? 'Unblocking…' : 'Blocking…'}
+                        </>
+                      ) : isBlocked ? (
+                        <>✓ Unblock Room</>
+                      ) : (
+                        <>🚫 Block Room</>
+                      )}
+                    </button>
+
+                    {/* Delete */}
+                    <button
+                      className="rm-delete-btn"
+                      disabled={deletingRoom === room.id}
+                      onClick={() => handleDelete(room.id, room.name)}
+                      title="Delete this room"
+                    >
+                      {deletingRoom === room.id ? (
+                        <>
+                          <span style={{ display: 'inline-block', width: 11, height: 11, border: '2px solid #fca5a5', borderTopColor: '#dc2626', borderRadius: '50%', animation: 'rm-spin 0.7s linear infinite' }} />
+                          Deleting…
+                        </>
+                      ) : (
+                        <>🗑 Delete</>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* ── Blocked banner ── */}
+                  {isBlocked && (
+                    <div className="rm-blocked-banner">
+                      🚫 This room is currently <strong>blocked</strong> — guests cannot see or book it.
+                    </div>
                   )}
-                </button>
 
-                <div className="rm-card-inner">
+                  <div className="rm-card-inner">
 
-                  {/* ── Image column ── */}
-                  <div>
-                    {room.imageData
-                      ? <img src={room.imageData} alt={room.name} className="rm-img" />
-                      : <div className="rm-img-placeholder">🛏️</div>
-                    }
+                    {/* ── Image column ── */}
+                    <div>
+                      {room.imageData
+                        ? <img src={room.imageData} alt={room.name} className="rm-img"
+                            style={{ opacity: isBlocked ? 0.5 : 1, filter: isBlocked ? 'grayscale(40%)' : 'none' }} />
+                        : <div className="rm-img-placeholder" style={{ opacity: isBlocked ? 0.5 : 1 }}>🛏️</div>
+                      }
 
-                    {imageFiles[room.id] && (
-                      <img
-                        src={URL.createObjectURL(imageFiles[room.id])}
-                        alt="Preview"
-                        className="rm-img"
-                        style={{ marginTop: 10, opacity: 0.8 }}
-                      />
-                    )}
-
-                    <div style={{ marginTop: 14 }}>
-                      <label className="rm-label">Upload New Photo</label>
-                      <label className="rm-file-label">
-                        <span>📷</span>
-                        <span>{imageFiles[room.id] ? imageFiles[room.id].name : 'Choose image…'}</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="rm-file-input"
-                          onChange={e => setImageFiles(prev => ({ ...prev, [room.id]: e.target.files[0] }))}
+                      {imageFiles[room.id] && (
+                        <img
+                          src={URL.createObjectURL(imageFiles[room.id])}
+                          alt="Preview"
+                          className="rm-img"
+                          style={{ marginTop: 10, opacity: 0.8 }}
                         />
-                      </label>
+                      )}
+
+                      <div style={{ marginTop: 14 }}>
+                        <label className="rm-label">Upload New Photo</label>
+                        <label className="rm-file-label">
+                          <span>📷</span>
+                          <span>{imageFiles[room.id] ? imageFiles[room.id].name : 'Choose image…'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="rm-file-input"
+                            onChange={e => setImageFiles(prev => ({ ...prev, [room.id]: e.target.files[0] }))}
+                          />
+                        </label>
+                      </div>
                     </div>
+
+                    {/* ── Fields column ── */}
+                    <div>
+                      <div className="rm-room-title">{room.name}</div>
+                      <div className="rm-room-meta">
+                        <span className="rm-meta-pill">📐 {room.size}m²</span>
+                        <span className="rm-meta-pill">👥 Max {room.maxPerson}</span>
+                        {isBlocked && (
+                          <span className="rm-meta-pill blocked-pill">🚫 Blocked</span>
+                        )}
+                      </div>
+
+                      <div style={{ marginBottom: 16 }}>
+                        <label className="rm-label">Description</label>
+                        <textarea
+                          className="rm-textarea"
+                          value={descChanges[room.id] ?? room.description}
+                          onChange={e => setDescChanges(prev => ({ ...prev, [room.id]: e.target.value }))}
+                          rows={4}
+                        />
+                      </div>
+
+                      <div style={{ marginBottom: 16 }}>
+                        <label className="rm-label">Price per Night ($)</label>
+                        <input
+                          type="number"
+                          className="rm-input"
+                          value={priceChanges[room.id] ?? room.price}
+                          onChange={e => setPriceChanges(prev => ({ ...prev, [room.id]: e.target.value }))}
+                          style={{ maxWidth: 200 }}
+                        />
+                      </div>
+
+                      {savedRoom === room.id ? (
+                        <div className="rm-saved-badge">✓ Saved successfully</div>
+                      ) : (
+                        <button
+                          className="rm-save-btn"
+                          disabled={uploading}
+                          onClick={() => handleSave(room.id)}
+                        >
+                          {uploading ? 'Saving…' : 'Save Changes'}
+                        </button>
+                      )}
+                    </div>
+
                   </div>
-
-                  {/* ── Fields column ── */}
-                  <div>
-                    <div className="rm-room-title">{room.name}</div>
-                    <div className="rm-room-meta">
-                      <span className="rm-meta-pill">📐 {room.size}m²</span>
-                      <span className="rm-meta-pill">👥 Max {room.maxPerson}</span>
-                    </div>
-
-                    <div style={{ marginBottom: 16 }}>
-                      <label className="rm-label">Description</label>
-                      <textarea
-                        className="rm-textarea"
-                        value={descChanges[room.id] ?? room.description}
-                        onChange={e => setDescChanges(prev => ({ ...prev, [room.id]: e.target.value }))}
-                        rows={4}
-                      />
-                    </div>
-
-                    <div style={{ marginBottom: 16 }}>
-                      <label className="rm-label">Price per Night ($)</label>
-                      <input
-                        type="number"
-                        className="rm-input"
-                        value={priceChanges[room.id] ?? room.price}
-                        onChange={e => setPriceChanges(prev => ({ ...prev, [room.id]: e.target.value }))}
-                        style={{ maxWidth: 200 }}
-                      />
-                    </div>
-
-                    {savedRoom === room.id ? (
-                      <div className="rm-saved-badge">✓ Saved successfully</div>
-                    ) : (
-                      <button
-                        className="rm-save-btn"
-                        disabled={uploading}
-                        onClick={() => handleSave(room.id)}
-                      >
-                        {uploading ? 'Saving…' : 'Save Changes'}
-                      </button>
-                    )}
-                  </div>
-
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </main>
 
         </div>
@@ -723,8 +836,6 @@ const Rooms = () => {
 
             <form onSubmit={handleAddRoom}>
               <div className="rm-modal-body">
-
-                {/* Basic Info */}
                 <div className="rm-section-divider">🛏️ Room Information</div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -742,8 +853,7 @@ const Rooms = () => {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                     <label className="rm-label">Price per Night ($) *</label>
                     <input
-                      type="number"
-                      min="1"
+                      type="number" min="1"
                       className="rm-input"
                       placeholder="e.g. 149"
                       value={newRoom.price}
@@ -754,9 +864,7 @@ const Rooms = () => {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                     <label className="rm-label">Max Persons *</label>
                     <input
-                      type="number"
-                      min="1"
-                      max="20"
+                      type="number" min="1" max="20"
                       className="rm-input"
                       placeholder="e.g. 2"
                       value={newRoom.maxPerson}
@@ -769,8 +877,7 @@ const Rooms = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                   <label className="rm-label">Room Size (m²)</label>
                   <input
-                    type="number"
-                    min="0"
+                    type="number" min="0"
                     className="rm-input"
                     placeholder="e.g. 35"
                     value={newRoom.size}
@@ -790,59 +897,38 @@ const Rooms = () => {
                   />
                 </div>
 
-                {/* Photo */}
                 <div className="rm-section-divider">📷 Room Photo</div>
 
                 <div>
                   <label className="rm-file-label" style={{ cursor: 'pointer' }}>
                     <span>📷</span>
-                    <span style={{ flex: 1 }}>
-                      {newRoomImage ? newRoomImage.name : 'Choose a photo (optional)'}
-                    </span>
+                    <span style={{ flex: 1 }}>{newRoomImage ? newRoomImage.name : 'Choose a photo (optional)'}</span>
                     {newRoomImage && (
-                      <span
-                        style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, cursor: 'pointer' }}
-                        onClick={(e) => { e.preventDefault(); setNewRoomImage(null); }}
-                      >
+                      <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, cursor: 'pointer' }}
+                        onClick={(e) => { e.preventDefault(); setNewRoomImage(null); }}>
                         Remove
                       </span>
                     )}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="rm-file-input"
-                      onChange={e => setNewRoomImage(e.target.files[0] || null)}
-                    />
+                    <input type="file" accept="image/*" className="rm-file-input"
+                      onChange={e => setNewRoomImage(e.target.files[0] || null)} />
                   </label>
                   {newRoomImage && (
-                    <img
-                      src={URL.createObjectURL(newRoomImage)}
-                      alt="Preview"
-                      style={{ width: '100%', height: 160, objectFit: 'cover', borderRadius: 10, marginTop: 10, border: '1px solid #e5e7eb' }}
-                    />
+                    <img src={URL.createObjectURL(newRoomImage)} alt="Preview"
+                      style={{ width: '100%', height: 160, objectFit: 'cover', borderRadius: 10, marginTop: 10, border: '1px solid #e5e7eb' }} />
                   )}
                 </div>
 
-                {/* Info note */}
                 <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#1d4ed8', lineHeight: 1.6 }}>
                   💡 Standard facilities (WiFi, parking, pool, etc.) will be added automatically. You can update the description and photo at any time.
                 </div>
-
               </div>
 
               <div className="rm-modal-foot">
-                <button
-                  type="button"
-                  className="rm-modal-cancel"
-                  onClick={() => { setShowAddModal(false); setNewRoom(EMPTY_ROOM); setNewRoomImage(null); }}
-                >
+                <button type="button" className="rm-modal-cancel"
+                  onClick={() => { setShowAddModal(false); setNewRoom(EMPTY_ROOM); setNewRoomImage(null); }}>
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className={`rm-modal-submit ${addSuccess ? 'success' : ''}`}
-                  disabled={addingRoom}
-                >
+                <button type="submit" className={`rm-modal-submit ${addSuccess ? 'success' : ''}`} disabled={addingRoom}>
                   {addSuccess ? '✓ Room Added!' : addingRoom ? 'Adding…' : '＋ Add Room'}
                 </button>
               </div>
@@ -850,10 +936,6 @@ const Rooms = () => {
           </div>
         </div>
       )}
-
-      <style>{`
-        @keyframes rm-spin { to { transform: rotate(360deg); } }
-      `}</style>
     </>
   );
 };

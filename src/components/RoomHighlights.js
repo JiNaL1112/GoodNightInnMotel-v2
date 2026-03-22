@@ -44,19 +44,27 @@ const RoomHighlights = () => {
 
         <div className="rooms-grid" ref={ref}>
           {displayRooms.map((room, i) => {
+            const isBlocked = !!room.blocked;
+
             const tagMap = {
               'Queen Bed':      'Best Value',
               'Two Queen Beds': 'Family Fave',
               'King Bed':       'Most Spacious',
               'Kitchenette':    'Extended Stay',
             };
-          const tag = room.tag || tagMap[room.name] || 'Great Stay';
-          const tagStyle = tagColors[tag] || { bg: '#e5e7eb', color: '#374151' };
+            const tag = room.tag || tagMap[room.name] || 'Great Stay';
+            const tagStyle = tagColors[tag] || { bg: '#e5e7eb', color: '#374151' };
+
             return (
               <div
                 key={room.id}
                 className={`room-card ${visible ? 'anim-in' : 'anim-hidden'}`}
-                style={{ transitionDelay: `${i * 0.1}s` }}
+                style={{
+                  transitionDelay: `${i * 0.1}s`,
+                  // dim blocked rooms slightly
+                  opacity: isBlocked ? 0.8 : 1,
+                  position: 'relative',
+                }}
               >
                 {/* Image / placeholder */}
                 <div
@@ -65,17 +73,29 @@ const RoomHighlights = () => {
                     background: room.imageData
                       ? `url(${room.imageData}) center/cover`
                       : cardBgs[i % cardBgs.length],
+                    filter: isBlocked ? 'grayscale(60%)' : 'none',
                   }}
                 >
                   {!room.imageData && (
                     <span className="room-card-emoji">{cardEmojis[i % cardEmojis.length]}</span>
                   )}
-                  <span
-                    className="room-card-tag"
-                    style={{ background: tagStyle.bg, color: tagStyle.color }}
-                  >
-                    {tag}
-                  </span>
+
+                  {/* Show "Unavailable" badge instead of the normal tag when blocked */}
+                  {isBlocked ? (
+                    <span
+                      className="room-card-tag"
+                      style={{ background: '#fef2f2', color: '#dc2626', fontWeight: 700 }}
+                    >
+                      🚫 Unavailable
+                    </span>
+                  ) : (
+                    <span
+                      className="room-card-tag"
+                      style={{ background: tagStyle.bg, color: tagStyle.color }}
+                    >
+                      {tag}
+                    </span>
+                  )}
                 </div>
 
                 {/* Content */}
@@ -83,13 +103,23 @@ const RoomHighlights = () => {
                   <div className="room-card-top">
                     <h3 className="room-card-name">{room.name}</h3>
                     <div className="room-card-price">
-                      <span className="price-amount">${room.price}</span>
-                      <span className="price-per">/night</span>
+                      {isBlocked ? (
+                        <span style={{ fontSize: '14px', color: '#dc2626', fontWeight: 600 }}>
+                          Not available
+                        </span>
+                      ) : (
+                        <>
+                          <span className="price-amount">${room.price}</span>
+                          <span className="price-per">/night</span>
+                        </>
+                      )}
                     </div>
                   </div>
 
                   <p className="room-card-desc">
-                    {room.description ? room.description.slice(0, 80) + '…' : 'Comfortable, clean, and ready for your stay.'}
+                    {isBlocked
+                      ? 'This room type is currently not available for booking. Please check back later or contact us directly.'
+                      : (room.description ? room.description.slice(0, 80) + '…' : 'Comfortable, clean, and ready for your stay.')}
                   </p>
 
                   <div className="room-card-meta">
@@ -97,16 +127,38 @@ const RoomHighlights = () => {
                     <span className="room-meta-pill">📐 {room.size}m²</span>
                   </div>
 
-                  <Link to={`/room/${room.id}`} className="btn-primary room-card-btn">
-                    Book This Room →
-                  </Link>
+                  {/* Show disabled button for blocked rooms, normal link otherwise */}
+                  {isBlocked ? (
+                    <button
+                      disabled
+                      style={{
+                        width: '100%',
+                        justifyContent: 'center',
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '12px 26px',
+                        borderRadius: 'var(--radius)',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        background: '#f3f4f6',
+                        color: '#9ca3af',
+                        border: '1.5px solid #e5e7eb',
+                        cursor: 'not-allowed',
+                        fontFamily: 'var(--font-body)',
+                      }}
+                    >
+                      🚫 Currently Unavailable
+                    </button>
+                  ) : (
+                    <Link to={`/room/${room.id}`} className="btn-primary room-card-btn">
+                      Book This Room →
+                    </Link>
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
-
-        
       </div>
     </section>
   );
