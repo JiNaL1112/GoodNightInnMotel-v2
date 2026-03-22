@@ -348,40 +348,144 @@ const AdminRecentReservations = () => {
   const hasFilters   = search || filterRoom || filterFrom || filterTo;
   const clearFilters = () => { setSearch(''); setFilterRoom(''); setFilterFrom(''); setFilterTo(''); };
 
+  // ─────────────────────────────────────────────────────────────────────────────
+// DROP-IN REPLACEMENT for handleExportExcel in AdminRecentReservations.js
+//
+// Replace the entire existing handleExportExcel function (from the first line
+// "const handleExportExcel = async () => {" down to and including its closing
+// "};") with the code below.
+// ─────────────────────────────────────────────────────────────────────────────
+
   const handleExportExcel = async () => {
     if (sorted.length === 0) { alert('No records to export.'); return; }
+
     const roomSnap = await getDocs(collection(db, 'rooms'));
     const roomMap  = {};
     roomSnap.docs.forEach(d => { roomMap[d.id] = d.data(); });
-    const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.2/package/xlsx.mjs');
-    const fmtD = (ts) => { if (!ts) return ''; const d = ts?.toDate ? ts.toDate() : new Date(ts); return d.toLocaleDateString('en-CA'); };
+
+    const fmtD = (ts) => {
+      if (!ts) return '';
+      const d = ts?.toDate ? ts.toDate() : new Date(ts);
+      return d.toLocaleDateString('en-CA');
+    };
+
+    // ── Build rows ────────────────────────────────────────────────────────────
     const rows = sorted.map(r => {
-      const room  = roomMap[r.roomId];
-      const price = room?.price ?? r.roomPrice ?? 0;  // ← same 3-tier logic
-      const ci = r.checkIn?.toDate  ? r.checkIn.toDate()  : new Date(r.checkIn  || 0);
-      const co = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut || 0);
+      // 3-tier price lookup (same as generateBill)
+      let room = roomMap[r.roomId];
+      if (!room && r.roomName) {
+        room = Object.values(roomMap).find(rm =>
+          rm.name?.toLowerCase().trim() === r.roomName?.toLowerCase().trim()
+        );
+      }
+      const price = room?.price != null ? Number(room.price)
+                  : r.roomPrice  != null ? Number(r.roomPrice)
+                  : 0;
+
+      const ci     = r.checkIn?.toDate  ? r.checkIn.toDate()  : new Date(r.checkIn  || 0);
+      const co     = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut || 0);
       const nights = Math.max(1, Math.ceil((co - ci) / (1000 * 60 * 60 * 24)));
-      const roomTotal = price * nights; const accomTax = roomTotal * 0.04;
-      const subTotal = roomTotal + accomTax; const hst = subTotal * 0.13; const total = subTotal + hst;
+
+      const roomTotal = parseFloat((price * nights).toFixed(2));
+      const accomTax  = parseFloat((roomTotal * 0.04).toFixed(2));
+      const subTotal  = parseFloat((roomTotal + accomTax).toFixed(2));
+      const hst       = parseFloat((subTotal * 0.13).toFixed(2));
+      const total     = parseFloat((subTotal + hst).toFixed(2));
+
+      // Resolve status label
+      const statusLabel =
+        r._eff === 'pending'     ? 'Pending'     :
+        r._eff === 'upcoming'    ? 'Upcoming'    :
+        r._eff === 'in-house'    ? 'In-House'    :
+        r._eff === 'checked-out' ? 'Checked Out' : r.status || '';
+
       return {
-        'Guest Name': r.pname || '', 'Email': r.email || '', 'Phone': r.phone || '',
-        'Address': r.address || '', 'City': r.city || '', 'Province': r.province || '',
-        'Country': r.country || '', 'Postal Code': r.postalCode || '',
-        'Company': r.company || '', 'Driver Lic No.': r.driverLicNo || '',
-        'DOB': r.dob || '', 'Plate #': r.plateNumber || '',
-        'Room Type': r.roomName || '', 'Room No.': r.roomNumber || '',
-        '# of Rooms': r.numberOfRooms || 1, 'Adults': r.adults ?? '', 'Kids': r.kids ?? '',
-        'Check-In': fmtD(r.checkIn), 'Check-Out': fmtD(r.checkOut),
-        'Checked-Out At': fmtD(r.checkedOutAt), 'Nights': nights,
-        'Rate/Night ($)': price, 'Room Total ($)': parseFloat(roomTotal.toFixed(2)),
-        'Accom. Tax 4% ($)': parseFloat(accomTax.toFixed(2)),
-        'Sub Total ($)': parseFloat(subTotal.toFixed(2)),
-        'HST 13% ($)': parseFloat(hst.toFixed(2)), 'Total Paid ($)': parseFloat(total.toFixed(2)),
-        'Deposit ($)': r.deposit ?? '', 'Returned Deposit ($)': r.returnedDeposit ?? '',
-        'Method of Payment': r.methodOfPayment || '', 'Clerk': r.clerk || '',
+        'Status':               statusLabel,
+        'Guest Name':           r.pname          || '',
+        'Email':                r.email          || '',
+        'Phone':                r.phone          || '',
+        'Address':              r.address        || '',
+        'City':                 r.city           || '',
+        'Province':             r.province       || '',
+        'Country':              r.country        || '',
+        'Postal Code':          r.postalCode     || '',
+        'Company':              r.company        || '',
+        'Driver Lic No.':       r.driverLicNo    || '',
+        'DOB':                  r.dob            || '',
+        'Plate #':              r.plateNumber    || '',
+        'Room Type':            r.roomName       || '',
+        'Room No.':             r.roomNumber     || '',
+        '# of Rooms':           Number(r.numberOfRooms) || 1,
+        'Adults':               r.adults         ?? '',
+        'Kids':                 r.kids           ?? '',
+        'Check-In':             fmtD(r.checkIn),
+        'Check-Out':            fmtD(r.checkOut),
+        'Checked-Out At':       fmtD(r.checkedOutAt),
+        'Nights':               nights,
+        'Rate/Night ($)':       price,
+        'Room Total ($)':       roomTotal,
+        'Accom. Tax 4% ($)':    accomTax,
+        'Sub Total ($)':        subTotal,
+        'HST 13% ($)':          hst,
+        'Total Paid ($)':       total,
+        'Deposit ($)':          r.deposit           != null ? Number(r.deposit)         : '',
+        'Returned Deposit ($)': r.returnedDeposit   != null ? Number(r.returnedDeposit) : '',
+        'Method of Payment':    r.methodOfPayment   || '',
+        'Clerk':                r.clerk             || '',
       };
     });
-    const ws = XLSX.utils.json_to_sheet(rows); const wb = XLSX.utils.book_new();
+
+    // ── Numeric columns that should receive a SUM totals row ─────────────────
+    const SUM_COLS = [
+      '# of Rooms', 'Adults', 'Kids', 'Nights',
+      'Rate/Night ($)', 'Room Total ($)', 'Accom. Tax 4% ($)',
+      'Sub Total ($)', 'HST 13% ($)', 'Total Paid ($)',
+      'Deposit ($)', 'Returned Deposit ($)',
+    ];
+
+    const headers = Object.keys(rows[0]);
+
+    // ── SheetJS ───────────────────────────────────────────────────────────────
+    const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.2/package/xlsx.mjs');
+
+    const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+    const wb = XLSX.utils.book_new();
+
+    const firstDataRow = 2;                      // header on row 1, data from row 2
+    const lastDataRow  = 1 + rows.length;        // last data row (1-based)
+    const totalsRow    = lastDataRow + 1;         // totals go one row below data
+
+    // Helper: convert 0-based column index → Excel column letter (A, B, … AA …)
+    const colLetter = (idx) => {
+      let letter = '';
+      let n = idx + 1;
+      while (n > 0) {
+        const rem = (n - 1) % 26;
+        letter = String.fromCharCode(65 + rem) + letter;
+        n = Math.floor((n - 1) / 26);
+      }
+      return letter;
+    };
+
+    // "TOTALS" label in column A
+    ws[`A${totalsRow}`] = { t: 's', v: 'TOTALS' };
+
+    // SUM formula for every numeric column
+    headers.forEach((h, colIdx) => {
+      if (!SUM_COLS.includes(h)) return;
+      const col     = colLetter(colIdx);
+      const cellRef = `${col}${totalsRow}`;
+      ws[cellRef]   = { t: 'n', f: `SUM(${col}${firstDataRow}:${col}${lastDataRow})` };
+    });
+
+    // Extend the sheet's declared range to cover the totals row
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    range.e.r   = totalsRow - 1;          // 0-based
+    ws['!ref']  = XLSX.utils.encode_range(range);
+
+    // Auto column widths (rough estimate from header length)
+    ws['!cols'] = headers.map(h => ({ wch: Math.max(h.length + 2, 12) }));
+
     XLSX.utils.book_append_sheet(wb, ws, 'Reservations');
     XLSX.writeFile(wb, `reservations_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
