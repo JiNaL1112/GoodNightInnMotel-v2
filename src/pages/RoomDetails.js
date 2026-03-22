@@ -266,35 +266,9 @@ const RoomDetails = () => {
                   </div>
                 </div>
 
-                <div style={fieldGroupStyle}>
-                  <label style={labelStyle}># of Rooms</label>
-                  <input type="number" min={1} max={10} value={numberOfRooms}
-                    onChange={(e) => setNumberOfRooms(e.target.value)} style={{ ...inputStyle, maxWidth: '120px' }} />
-                </div>
+                
 
-                {/* ── Section: Payment ── */}
-                <div style={{ ...sectionLabelStyle, marginTop: '8px' }}>💳 Payment & Deposit</div>
-
-                <div style={fieldGroupStyle}>
-                  <label style={labelStyle}>Method of Payment</label>
-                  <select value={methodOfPayment} onChange={(e) => setMethodOfPayment(e.target.value)} style={selectStyle}>
-                    <option value="">Select method…</option>
-                    {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                </div>
-
-                <div style={twoColStyle}>
-                  <div style={fieldGroupStyle}>
-                    <label style={labelStyle}>Deposit ($)</label>
-                    <input type="number" min={0} step="0.01" placeholder="0.00" value={deposit}
-                      onChange={(e) => setDeposit(e.target.value)} style={inputStyle} />
-                  </div>
-                  <div style={fieldGroupStyle}>
-                    <label style={labelStyle}>Returned Deposit ($)</label>
-                    <input type="number" min={0} step="0.01" placeholder="0.00" value={returnedDeposit}
-                      onChange={(e) => setReturnedDeposit(e.target.value)} style={inputStyle} />
-                  </div>
-                </div>
+                
 
               </div>
 
