@@ -153,12 +153,7 @@ useEffect(() => {
           {/* Management — navigate to separate routes */}
           <div className="adm-nav-section">
             <div className="adm-nav-label">Management</div>
-            <button
-              className="adm-nav-item"
-              onClick={() => navigate('/admin/reservation')}
-            >
-              <span className="adm-nav-icon">📝</span> Reservations
-            </button>
+            
             <button
               className="adm-nav-item"
               onClick={() => navigate('/admin/rooms')}
