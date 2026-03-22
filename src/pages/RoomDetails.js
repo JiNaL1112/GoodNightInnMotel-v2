@@ -10,6 +10,16 @@ import { roomData } from '../data';
 import { FaCheck } from 'react-icons/fa';
 import { FaWifi, FaTv, FaCoffee, FaWind, FaSwimmingPool } from 'react-icons/fa';
 import { MdOutlineKitchen } from 'react-icons/md';
+import { db } from '../config/firebase';
+import { collection, getDocs } from 'firebase/firestore';
+
+// ── Room name → gallery image prefix mapping ──────────────────────────────────
+const ROOM_PREFIX = {
+  'Queen Bed':      'q-',
+  'Two Queen Beds': '2q-',
+  'King Bed':       'king-',
+  'Kitchenette':    'kit-',
+};
 
 const facilitiesConfig = [
   { name: 'Free WiFi',      icon: <FaWifi />,           color: '#dbeafe', border: '#bfdbfe', iconColor: '#2563eb' },
@@ -284,7 +294,6 @@ const RoomHeroBanner = ({ name, price }) => {
       overflow: 'hidden',
       textAlign: 'center',
     }}>
-      {/* Radial background glow */}
       <div style={{
         position: 'absolute', inset: 0, pointerEvents: 'none',
         backgroundImage:
@@ -293,16 +302,9 @@ const RoomHeroBanner = ({ name, price }) => {
       }} />
 
       <div style={{ position: 'relative', zIndex: 2, padding: '0 24px' }}>
-
-        {/* Breadcrumb */}
         <div style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '6px',
-          fontSize: '12px',
-          color: 'var(--text-muted)',
-          marginBottom: '16px',
-          fontWeight: '500',
+          display: 'inline-flex', alignItems: 'center', gap: '6px',
+          fontSize: '12px', color: 'var(--text-muted)', marginBottom: '16px', fontWeight: '500',
         }}>
           <a href="/" style={{ color: 'var(--text-muted)', textDecoration: 'none', transition: 'color 0.2s' }}
             onMouseEnter={e => e.target.style.color = 'var(--blue)'}
@@ -317,33 +319,21 @@ const RoomHeroBanner = ({ name, price }) => {
           <span style={{ color: 'var(--text)' }}>{name}</span>
         </div>
 
-        {/* Tag badge */}
         {tag && (
           <div style={{ marginBottom: '14px' }}>
             <span style={{
-              display: 'inline-block',
-              background: tag.bg,
-              color: tag.color,
-              fontSize: '11px',
-              fontWeight: '700',
-              letterSpacing: '1.5px',
-              textTransform: 'uppercase',
-              padding: '5px 14px',
-              borderRadius: '100px',
+              display: 'inline-block', background: tag.bg, color: tag.color,
+              fontSize: '11px', fontWeight: '700', letterSpacing: '1.5px',
+              textTransform: 'uppercase', padding: '5px 14px', borderRadius: '100px',
             }}>
               {tag.label}
             </span>
           </div>
         )}
 
-        {/* Room name */}
         <h1 style={{
-          fontFamily: 'var(--font-disp)',
-          fontSize: 'clamp(34px, 5.5vw, 58px)',
-          fontWeight: '500',
-          color: 'var(--text)',
-          lineHeight: '1.15',
-          margin: '0 0 14px',
+          fontFamily: 'var(--font-disp)', fontSize: 'clamp(34px, 5.5vw, 58px)',
+          fontWeight: '500', color: 'var(--text)', lineHeight: '1.15', margin: '0 0 14px',
         }}>
           {name.split(' ').map((word, i, arr) =>
             i === arr.length - 1
@@ -352,40 +342,28 @@ const RoomHeroBanner = ({ name, price }) => {
           )}
         </h1>
 
-        {/* Subtitle */}
         <p style={{
-          fontSize: '15px',
-          color: 'var(--text-muted)',
-          lineHeight: '1.7',
-          maxWidth: '460px',
-          margin: '0 auto 24px',
+          fontSize: '15px', color: 'var(--text-muted)', lineHeight: '1.7',
+          maxWidth: '460px', margin: '0 auto 24px',
         }}>
           GoodNight Inn · Port Colborne, ON · Starting from{' '}
           <strong style={{ color: 'var(--blue)' }}>${price}/night</strong>
         </p>
 
-        {/* Pill row */}
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
           {['Free WiFi', 'Free Parking', 'Pool Access', 'Daily Housekeeping'].map(pill => (
             <span key={pill} style={{
-              background: 'var(--blue-light)',
-              color: 'var(--blue)',
-              border: '1px solid var(--blue-mid)',
-              borderRadius: '100px',
-              fontSize: '12px',
-              fontWeight: '600',
-              padding: '5px 14px',
+              background: 'var(--blue-light)', color: 'var(--blue)',
+              border: '1px solid var(--blue-mid)', borderRadius: '100px',
+              fontSize: '12px', fontWeight: '600', padding: '5px 14px',
             }}>✓ {pill}</span>
           ))}
         </div>
       </div>
 
-      {/* Bottom accent line */}
       <div style={{
         position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)',
-        width: '80px', height: '3px',
-        background: 'var(--blue)',
-        borderRadius: '2px',
+        width: '80px', height: '3px', background: 'var(--blue)', borderRadius: '2px',
       }} />
     </div>
   );
@@ -421,6 +399,42 @@ const RoomDetails = () => {
   const { id } = useParams();
   const room = rooms.find(room => room.id.toString() === id);
 
+  // ── Gallery images fetched from Firestore ─────────────────────────────────
+  const [gallerySlides, setGallerySlides] = useState(null); // null = loading
+
+  useEffect(() => {
+    if (!room) return;
+
+    const prefix = ROOM_PREFIX[room.name];
+
+    const fetchGallery = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'gallery'));
+        const all  = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        // Filter by prefix (case-insensitive)
+        const matched = prefix
+          ? all.filter(img =>
+              (img.name || '').toLowerCase().startsWith(prefix.toLowerCase())
+            )
+          : [];
+
+        if (matched.length > 0) {
+          // Sort by name so q-001, q-002 … come out in order
+          matched.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+          setGallerySlides(matched.map(img => ({ type: 'image', src: img.base64 })));
+        } else {
+          setGallerySlides([]); // no gallery images → fall back to placeholders
+        }
+      } catch (err) {
+        console.error('Gallery fetch error:', err);
+        setGallerySlides([]); // on error, fall back to placeholders
+      }
+    };
+
+    fetchGallery();
+  }, [room]);
+
   useEffect(() => {
     if (room) {
       setSelectedRoomId(room.id);
@@ -442,13 +456,31 @@ const RoomDetails = () => {
   const { name, description, imageData, price } = room;
   const localRoom = roomData.find((r) => r.name === name) || roomData[0];
 
-  /* ── Build the slides array ── */
-  const slides = [];
-  if (imageData) slides.push({ type: 'image', src: imageData });
-  if (localRoom?.imageLg) slides.push({ type: 'image', src: localRoom.imageLg });
-  if (localRoom?.image && localRoom?.image !== localRoom?.imageLg) slides.push({ type: 'image', src: localRoom.image });
-  const needed = Math.max(0, 4 - slides.length);
-  PLACEHOLDER_SLIDES.slice(0, needed).forEach(p => slides.push({ ...p, type: 'placeholder' }));
+  /* ── Build slides array ──────────────────────────────────────────────────
+     Priority:
+       1. Gallery images from Firestore (filtered by prefix)
+       2. Room imageData (admin-uploaded photo on the room doc)
+       3. Local static images from data.js
+       4. Placeholder slides (fallback)
+  ── */
+  let slides = [];
+
+  if (gallerySlides === null) {
+    // Still loading — show a single loading placeholder
+    slides = [{ type: 'placeholder', emoji: '⏳', bg: 'linear-gradient(135deg,#f1f5f9 0%,#e2e8f0 100%)', label: 'Loading photos…' }];
+  } else if (gallerySlides.length > 0) {
+    // Use gallery images (already sorted)
+    slides = gallerySlides;
+  } else {
+    // Fall back: room imageData → local static images → placeholders
+    if (imageData) slides.push({ type: 'image', src: imageData });
+    if (localRoom?.imageLg) slides.push({ type: 'image', src: localRoom.imageLg });
+    if (localRoom?.image && localRoom.image !== localRoom.imageLg)
+      slides.push({ type: 'image', src: localRoom.image });
+
+    const needed = Math.max(0, 4 - slides.length);
+    PLACEHOLDER_SLIDES.slice(0, needed).forEach(p => slides.push({ ...p, type: 'placeholder' }));
+  }
 
   return (
     <section>
