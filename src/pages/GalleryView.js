@@ -315,7 +315,6 @@ const GalleryView = () => {
           <h2 className="cta-heading">Like What You <em className="cta-em">See?</em></h2>
           <p className="cta-sub">Book direct for the best rate — no booking fees, no middleman, instant confirmation.</p>
           <div className="cta-actions">
-            <a href="/#rooms" className="cta-btn-main">Browse Rooms →</a>
             <a href="tel:+18338551818" className="cta-btn-ghost">📞 1-833-855-1818</a>
           </div>
         </div>

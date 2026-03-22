@@ -63,7 +63,6 @@ const AmenitiesStrip = () => {
               <div className="callout-sub">Complimentary for all guests · Towels provided at the pool deck</div>
             </div>
           </div>
-          <a href="tel:+18338551818" className="btn-primary">Reserve a Room</a>
         </div>
       </div>
     </section>

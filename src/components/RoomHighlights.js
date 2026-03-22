@@ -106,9 +106,7 @@ const RoomHighlights = () => {
           })}
         </div>
 
-        <div className="rooms-footer">
-          <Link to="/#rooms" className="btn-outline-dark">View All Rooms</Link>
-        </div>
+        
       </div>
     </section>
   );

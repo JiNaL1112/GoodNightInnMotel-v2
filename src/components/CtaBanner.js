@@ -13,9 +13,6 @@ const CtaBanner = () => (
         Best rate guaranteed when you call or book with us directly.
       </p>
       <div className="cta-actions">
-        <Link to="/#rooms" className="cta-btn-main">
-          Browse Rooms →
-        </Link>
         <a href="tel:+18338551818" className="cta-btn-ghost">
           📞 1-833-855-1818
         </a>
