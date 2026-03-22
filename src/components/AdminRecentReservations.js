@@ -120,7 +120,7 @@ const AdminRecentReservations = () => {
     finally { setLoading(false); }
   };
 
-  const handleSort    = (col) => { if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortCol(col); setSortDir('asc'); } };
+  const handleSort     = (col) => { if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortCol(col); setSortDir('asc'); } };
   const handleConfirm  = async (id) => { await updateDoc(doc(db, 'reservations', id), { status: 'booked' }); fetchReservations(); };
   const handleCheckIn  = async (r)  => { if (!window.confirm(`Check in ${r.pname}?`)) return; await updateDoc(doc(db, 'reservations', r.id), { checkedInAt: new Date() }); fetchReservations(); };
   const handleCheckOut = async (r)  => { if (!window.confirm(`Check out ${r.pname}?`)) return; await updateDoc(doc(db, 'reservations', r.id), { status: 'checked-out', checkedOutAt: new Date() }); fetchReservations(); };
@@ -154,12 +154,16 @@ const AdminRecentReservations = () => {
     setShowModal(true);
   };
 
+  // ── Save roomPrice snapshot onto the reservation so receipt always has it ──
   const handleFormSubmit = async (e) => {
     e.preventDefault(); setSaving(true);
+    const selectedRoom = rooms.find(r => r.id === selectedRoomId);
+    const roomPrice    = selectedRoom?.price ?? null;
     const data = {
       pname, email, phone, checkIn: checkInDate, checkOut: checkOutDate,
       adults, kids, roomId: selectedRoomId, roomName: selectedRoomName,
       roomNumber, status: 'booked',
+      roomPrice,  // ← price snapshot stored on the reservation
       [isEditing ? 'updatedAt' : 'createdAt']: new Date(),
       address, city, province, country, postalCode,
       company, driverLicNo, dob,
@@ -176,120 +180,107 @@ const AdminRecentReservations = () => {
     finally { setSaving(false); }
   };
 
+  // ── 3-tier price lookup so the receipt ALWAYS shows the correct amount ─────
+  //  Tier 1: match room by roomId  (exact Firestore doc ID)
+  //  Tier 2: match room by roomName (covers seed data / recreated rooms)
+  //  Tier 3: use roomPrice stored directly on the reservation document
+  //  Last:   0 (receipt still opens, price shown as $0.00)
   const generateBill = async (res) => {
-    const roomSnap = await getDocs(collection(db, 'rooms'));
-    const room = roomSnap.docs.map(d => ({ ...d.data(), id: d.id })).find(r => r.id === res.roomId);
-    if (!room) return;
-    const checkIn  = res.checkIn?.toDate  ? res.checkIn.toDate()  : new Date(res.checkIn);
-    const checkOut = res.checkOut?.toDate ? res.checkOut.toDate() : new Date(res.checkOut);
-    const nights   = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
-    const roomTotal = room.price * nights;
-    const accomTax  = roomTotal * 0.04;
-    const subTotal  = roomTotal + accomTax;
-    const hst       = subTotal * 0.13;
-    setBillDetails({
-      guest: res.pname, email: res.email, phone: res.phone,
-      address: res.address, city: res.city, province: res.province,
-      country: res.country, postalCode: res.postalCode,
-      company: res.company, driverLicNo: res.driverLicNo, dob: res.dob,
-      plateNumber: res.plateNumber,
-      roomName: room.name, roomNumber: res.roomNumber || 'N/A',
-      numberOfRooms: res.numberOfRooms || 1,
-      checkIn:   checkIn.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }),
-      checkOut:  checkOut.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }),
-      createdAt: new Date().toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }),
-      nights, roomPrice: room.price, roomTotal, accomTax, subTotal,
-      hstAmount: hst, totalAmount: subTotal + hst,
-      deposit: res.deposit, returnedDeposit: res.returnedDeposit,
-      methodOfPayment: res.methodOfPayment,
-      clerk: res.clerk, adults: res.adults, kids: res.kids,
-    });
-    setBillModal(true);
+    try {
+      const roomSnap = await getDocs(collection(db, 'rooms'));
+      const allRooms = roomSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+
+      let room = allRooms.find(r => r.id === res.roomId);
+
+      if (!room && res.roomName) {
+        room = allRooms.find(r =>
+          r.name?.toLowerCase().trim() === res.roomName?.toLowerCase().trim()
+        );
+      }
+
+      const roomPrice =
+        room?.price != null          ? Number(room.price)       :
+        res.roomPrice != null         ? Number(res.roomPrice)    :
+        0;
+
+      const roomName = room?.name ?? res.roomName ?? 'Unknown Room';
+
+      const checkIn  = res.checkIn?.toDate  ? res.checkIn.toDate()  : new Date(res.checkIn  || Date.now());
+      const checkOut = res.checkOut?.toDate ? res.checkOut.toDate() : new Date(res.checkOut || Date.now());
+      const nights   = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
+      const roomTotal = roomPrice * nights;
+      const accomTax  = roomTotal * 0.04;
+      const subTotal  = roomTotal + accomTax;
+      const hst       = subTotal * 0.13;
+
+      setBillDetails({
+        guest: res.pname, email: res.email, phone: res.phone,
+        address: res.address, city: res.city, province: res.province,
+        country: res.country, postalCode: res.postalCode,
+        company: res.company, driverLicNo: res.driverLicNo, dob: res.dob,
+        plateNumber: res.plateNumber,
+        roomName, roomNumber: res.roomNumber || 'N/A',
+        numberOfRooms: res.numberOfRooms || 1,
+        checkIn:   checkIn.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }),
+        checkOut:  checkOut.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }),
+        createdAt: new Date().toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }),
+        nights, roomPrice, roomTotal, accomTax, subTotal,
+        hstAmount: hst, totalAmount: subTotal + hst,
+        deposit: res.deposit, returnedDeposit: res.returnedDeposit,
+        methodOfPayment: res.methodOfPayment,
+        clerk: res.clerk, adults: res.adults, kids: res.kids,
+      });
+      setBillModal(true);
+    } catch (err) {
+      console.error('generateBill error:', err);
+      alert('Failed to load receipt. Please try again.');
+    }
   };
 
-  // ── PDF GENERATION ───────────────────────────────────────────────────────────
+  // ── PDF ───────────────────────────────────────────────────────────────────
   const handleDownloadPdf = async () => {
     const el = document.getElementById('receipt-printable');
     if (!el) return;
     setGeneratingPdf(true);
-
-    // Lift overflow clipping on every scroll ancestor so html2canvas sees full height
     const scrollAncestors = [];
     let node = el.parentElement;
     while (node && node !== document.body) {
       const cs = window.getComputedStyle(node);
-      if (['auto','hidden','scroll'].includes(cs.overflow) ||
-          ['auto','hidden','scroll'].includes(cs.overflowY) ||
-          node.style.maxHeight) {
-        scrollAncestors.push({
-          el: node,
-          overflow:  node.style.overflow,
-          overflowY: node.style.overflowY,
-          maxHeight: node.style.maxHeight,
-        });
-        node.style.overflow  = 'visible';
-        node.style.overflowY = 'visible';
-        node.style.maxHeight = 'none';
+      if (['auto','hidden','scroll'].includes(cs.overflow) || ['auto','hidden','scroll'].includes(cs.overflowY) || node.style.maxHeight) {
+        scrollAncestors.push({ el: node, overflow: node.style.overflow, overflowY: node.style.overflowY, maxHeight: node.style.maxHeight });
+        node.style.overflow = 'visible'; node.style.overflowY = 'visible'; node.style.maxHeight = 'none';
       }
       node = node.parentElement;
     }
-
     await new Promise(r => setTimeout(r, 200));
-
     try {
-      const canvas = await html2canvas(el, {
-        scale: 2.5,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        width:        el.scrollWidth,
-        height:       el.scrollHeight,
-        windowWidth:  el.scrollWidth,
-        windowHeight: el.scrollHeight,
-        x: 0, y: 0, scrollX: 0, scrollY: 0,
-      });
-
-      const imgData     = canvas.toDataURL('image/png');
-      const pdf         = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const pageW       = pdf.internal.pageSize.getWidth();
-      const pageH       = pdf.internal.pageSize.getHeight();
-      const margin      = 10;
-      const printW      = pageW - margin * 2;
-      const totalImgH   = (canvas.height * printW) / canvas.width;
+      const canvas = await html2canvas(el, { scale: 2.5, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false, width: el.scrollWidth, height: el.scrollHeight, windowWidth: el.scrollWidth, windowHeight: el.scrollHeight, x: 0, y: 0, scrollX: 0, scrollY: 0 });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageW = pdf.internal.pageSize.getWidth(), pageH = pdf.internal.pageSize.getHeight();
+      const margin = 10, printW = pageW - margin * 2;
+      const totalImgH = (canvas.height * printW) / canvas.width;
       const usablePageH = pageH - margin * 2;
-
       if (totalImgH <= usablePageH) {
-        // Single page — vertically centred
-        const yOffset = (pageH - totalImgH) / 2;
-        pdf.addImage(imgData, 'PNG', margin, yOffset, printW, totalImgH);
+        pdf.addImage(imgData, 'PNG', margin, (pageH - totalImgH) / 2, printW, totalImgH);
       } else {
-        // Multi-page slicing
-        const pxPerMm  = canvas.width / printW;
-        const sliceHpx = usablePageH * pxPerMm;
+        const pxPerMm = canvas.width / printW, sliceHpx = usablePageH * pxPerMm;
         let yPx = 0, pageIdx = 0;
         while (yPx < canvas.height) {
           const thisSlice = Math.min(sliceHpx, canvas.height - yPx);
-          const sc = document.createElement('canvas');
-          sc.width = canvas.width; sc.height = Math.ceil(thisSlice);
-          const ctx = sc.getContext('2d');
-          ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, sc.width, sc.height);
+          const sc = document.createElement('canvas'); sc.width = canvas.width; sc.height = Math.ceil(thisSlice);
+          const ctx = sc.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, sc.width, sc.height);
           ctx.drawImage(canvas, 0, yPx, canvas.width, thisSlice, 0, 0, canvas.width, thisSlice);
           if (pageIdx > 0) pdf.addPage();
           pdf.addImage(sc.toDataURL('image/png'), 'PNG', margin, margin, printW, thisSlice / pxPerMm);
           yPx += thisSlice; pageIdx++;
         }
       }
-
-      const safeName = (billDetails.guest || 'guest').replace(/\s+/g, '_');
-      pdf.save(`receipt_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`);
+      pdf.save(`receipt_${(billDetails.guest || 'guest').replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch (err) {
-      console.error('PDF generation failed:', err);
-      alert('PDF generation failed. Please try again.');
+      console.error('PDF failed:', err); alert('PDF generation failed. Please try again.');
     } finally {
-      scrollAncestors.forEach(({ el: a, overflow, overflowY, maxHeight }) => {
-        a.style.overflow = overflow; a.style.overflowY = overflowY; a.style.maxHeight = maxHeight;
-      });
+      scrollAncestors.forEach(({ el: a, overflow, overflowY, maxHeight }) => { a.style.overflow = overflow; a.style.overflowY = overflowY; a.style.maxHeight = maxHeight; });
       setGeneratingPdf(false);
     }
   };
@@ -365,7 +356,8 @@ const AdminRecentReservations = () => {
     const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.2/package/xlsx.mjs');
     const fmtD = (ts) => { if (!ts) return ''; const d = ts?.toDate ? ts.toDate() : new Date(ts); return d.toLocaleDateString('en-CA'); };
     const rows = sorted.map(r => {
-      const room = roomMap[r.roomId]; const price = room?.price ?? 0;
+      const room  = roomMap[r.roomId];
+      const price = room?.price ?? r.roomPrice ?? 0;  // ← same 3-tier logic
       const ci = r.checkIn?.toDate  ? r.checkIn.toDate()  : new Date(r.checkIn  || 0);
       const co = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut || 0);
       const nights = Math.max(1, Math.ceil((co - ci) / (1000 * 60 * 60 * 24)));
@@ -447,10 +439,8 @@ const AdminRecentReservations = () => {
   const inp       = { background: 'var(--ink-3)', border: '1px solid var(--border-2)', borderRadius: 8, padding: '7px 11px', fontSize: 12, fontFamily: 'var(--font-disp)', color: 'var(--text)', outline: 'none' };
   const pageBtnSt = (dis) => ({ padding: '5px 12px', borderRadius: 6, border: '1px solid var(--border-2)', background: 'var(--ink-3)', color: dis ? 'var(--text-3)' : 'var(--text)', cursor: dis ? 'not-allowed' : 'pointer', fontSize: 11, opacity: dis ? 0.5 : 1 });
   const mi        = { background: '#1a1a28', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '10px 14px', fontSize: 13, fontFamily: 'DM Sans, sans-serif', color: '#e8e8f0', outline: 'none', width: '100%', boxSizing: 'border-box' };
-
-  // Shared receipt table cell styles
-  const rcTd  = { padding: '4px 0', color: '#9ca3af', fontSize: 11, whiteSpace: 'nowrap' };
-  const rcVal = { padding: '4px 0', textAlign: 'right', fontWeight: 600, color: '#1a1a1a', fontSize: 11 };
+  const rcTd      = { padding: '4px 0', color: '#9ca3af', fontSize: 11, whiteSpace: 'nowrap' };
+  const rcVal     = { padding: '4px 0', textAlign: 'right', fontWeight: 600, color: '#1a1a1a', fontSize: 11 };
 
   const tabInfo = {
     pending:    '⏳ Awaiting admin confirmation. Room is NOT blocked until confirmed.',
@@ -463,7 +453,7 @@ const AdminRecentReservations = () => {
     <>
       <div className="adm-panel" style={{ marginBottom: 20 }}>
 
-        {/* ── Tabs + Add ── */}
+        {/* Tabs */}
         <div className="adm-panel-head">
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
             {TABS.map(tab => (
@@ -487,7 +477,7 @@ const AdminRecentReservations = () => {
           <span>ℹ</span><span>{tabInfo[activeTab]}</span>
         </div>
 
-        {/* ── Filter bar ── */}
+        {/* Filter bar */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', background: 'var(--ink-2)', borderRadius: 10, padding: '12px 14px', marginBottom: 16, border: '1px solid var(--border)' }}>
           <div style={{ position: 'relative', flex: '1 1 180px', minWidth: 160 }}>
             <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--text-3)', pointerEvents: 'none' }}>🔍</span>
@@ -515,7 +505,7 @@ const AdminRecentReservations = () => {
           )}
         </div>
 
-        {/* ── Table ── */}
+        {/* Table */}
         <div style={{ overflowX: 'auto' }}>
           {loading ? (
             <div className="adm-loading"><div className="adm-spinner" /><span>Loading reservations…</span></div>
@@ -585,7 +575,7 @@ const AdminRecentReservations = () => {
           )}
         </div>
 
-        {/* ── Pagination ── */}
+        {/* Pagination */}
         {!loading && sorted.length > PAGE_SIZE && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 4px 2px', borderTop: '1px solid var(--border)', marginTop: 12 }}>
             <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
@@ -606,9 +596,7 @@ const AdminRecentReservations = () => {
         )}
       </div>
 
-      {/* ══════════════════════════════════════════════════════════
-          ADD / EDIT MODAL
-      ══════════════════════════════════════════════════════════ */}
+      {/* ══════ ADD / EDIT MODAL ══════ */}
       {showModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.80)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div style={{ background: '#12121a', borderRadius: 18, width: '100%', maxWidth: 660, border: '1px solid rgba(255,255,255,0.12)', maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 24px 80px rgba(0,0,0,0.6)' }}>
@@ -688,32 +676,24 @@ const AdminRecentReservations = () => {
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════════
-          RECEIPT MODAL — compact single-page design
-      ══════════════════════════════════════════════════════════ */}
+      {/* ══════ RECEIPT MODAL ══════ */}
       {billModal && billDetails && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div style={{ background: '#f1f0ed', borderRadius: 16, width: '100%', maxWidth: 600, maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 24px 60px rgba(0,0,0,0.4)', fontFamily: "'DM Sans', sans-serif" }}>
 
-            {/* Close — outside printable area */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 12px 0' }}>
               <button onClick={() => setBillModal(false)} style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#6b7280', width: 30, height: 30, borderRadius: 7, fontSize: 17, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>×</button>
             </div>
 
-            {/* ═══════ PRINTABLE RECEIPT ═══════ */}
-            <div
-              id="receipt-printable"
-              style={{ background: '#ffffff', margin: '8px 12px 12px', borderRadius: 10, border: '1px solid #e5e7eb', overflow: 'hidden' }}
-            >
-              {/* Header — solid colour, no gradient */}
+            <div id="receipt-printable" style={{ background: '#ffffff', margin: '8px 12px 12px', borderRadius: 10, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+
+              {/* Header */}
               <div style={{ background: '#1e3a5f', padding: '13px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.15)', borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>🌙</div>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 14, color: '#fff' }}>GoodNight Inn</div>
-                    <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.6)', marginTop: 1 }}>
-                      664 Main St. W, Port Colborne, ON · 905-835-1818 · HST# 833074875RT0001
-                    </div>
+                    <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.6)', marginTop: 1 }}>664 Main St. W, Port Colborne, ON · 905-835-1818 · HST# 833074875RT0001</div>
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
@@ -722,14 +702,12 @@ const AdminRecentReservations = () => {
                 </div>
               </div>
 
-              {/* Guest name strip */}
+              {/* Guest strip */}
               <div style={{ background: '#f8f7f4', borderBottom: '1px solid #e5e7eb', padding: '10px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <div style={{ fontSize: 9, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1 }}>Guest</div>
                   <div style={{ fontSize: 15, fontWeight: 700, color: '#1a1a1a', marginTop: 1 }}>{billDetails.guest}</div>
-                  <div style={{ fontSize: 10, color: '#6b7280', marginTop: 1 }}>
-                    {[billDetails.email, billDetails.phone].filter(Boolean).join(' · ')}
-                  </div>
+                  <div style={{ fontSize: 10, color: '#6b7280', marginTop: 1 }}>{[billDetails.email, billDetails.phone].filter(Boolean).join(' · ')}</div>
                   {billDetails.company && <div style={{ fontSize: 10, color: '#6b7280' }}>{billDetails.company}</div>}
                 </div>
                 {billDetails.clerk && (
@@ -741,10 +719,8 @@ const AdminRecentReservations = () => {
               </div>
 
               <div style={{ padding: '12px 18px' }}>
-
-                {/* 2-column: Stay + Guest details */}
+                {/* Stay + Guest 2-col */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-                  {/* Stay details */}
                   <div style={{ background: '#f8f7f4', border: '1px solid #e5e7eb', borderRadius: 7, padding: '10px 12px' }}>
                     <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#6b7280', marginBottom: 7 }}>Stay Details</div>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -760,32 +736,28 @@ const AdminRecentReservations = () => {
                       </tbody>
                     </table>
                   </div>
-
-                  {/* Guest details */}
                   <div style={{ background: '#f8f7f4', border: '1px solid #e5e7eb', borderRadius: 7, padding: '10px 12px' }}>
                     <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#6b7280', marginBottom: 7 }}>Guest Details</div>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <tbody>
-                        {billDetails.address && (
-                          <tr><td style={rcTd}>Address</td><td style={{ ...rcVal, whiteSpace: 'normal', fontSize: 10 }}>{[billDetails.address, billDetails.city, billDetails.province].filter(Boolean).join(', ')}</td></tr>
-                        )}
-                        {billDetails.postalCode  && <tr><td style={rcTd}>Postal</td><td style={rcVal}>{billDetails.postalCode}</td></tr>}
-                        {billDetails.country     && <tr><td style={rcTd}>Country</td><td style={rcVal}>{billDetails.country}</td></tr>}
-                        {billDetails.driverLicNo && <tr><td style={rcTd}>Driver Lic.</td><td style={rcVal}>{billDetails.driverLicNo}</td></tr>}
-                        {billDetails.dob         && <tr><td style={rcTd}>DOB</td><td style={rcVal}>{billDetails.dob}</td></tr>}
-                        {billDetails.plateNumber && <tr><td style={rcTd}>Plate #</td><td style={rcVal}>{billDetails.plateNumber}</td></tr>}
+                        {billDetails.address && <tr><td style={rcTd}>Address</td><td style={{ ...rcVal, whiteSpace: 'normal', fontSize: 10 }}>{[billDetails.address, billDetails.city, billDetails.province].filter(Boolean).join(', ')}</td></tr>}
+                        {billDetails.postalCode   && <tr><td style={rcTd}>Postal</td><td style={rcVal}>{billDetails.postalCode}</td></tr>}
+                        {billDetails.country      && <tr><td style={rcTd}>Country</td><td style={rcVal}>{billDetails.country}</td></tr>}
+                        {billDetails.driverLicNo  && <tr><td style={rcTd}>Driver Lic.</td><td style={rcVal}>{billDetails.driverLicNo}</td></tr>}
+                        {billDetails.dob          && <tr><td style={rcTd}>DOB</td><td style={rcVal}>{billDetails.dob}</td></tr>}
+                        {billDetails.plateNumber  && <tr><td style={rcTd}>Plate #</td><td style={rcVal}>{billDetails.plateNumber}</td></tr>}
                         {billDetails.methodOfPayment && <tr><td style={rcTd}>Payment</td><td style={rcVal}>{billDetails.methodOfPayment}</td></tr>}
                       </tbody>
                     </table>
                   </div>
                 </div>
 
-                {/* Notice — condensed */}
+                {/* Notice */}
                 <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '7px 10px', marginBottom: 10, fontSize: 9, color: '#92400e', lineHeight: 1.5 }}>
                   <strong>Notice to Guests:</strong> Management reserves the right to refuse service. Not responsible for accidents, injury, or loss of valuables. Guests are responsible for all charges incurred during and after their stay. Items removed or damaged will be billed to your account.
                 </div>
 
-                {/* Billing summary */}
+                {/* Billing */}
                 <div style={{ border: '1px solid #e5e7eb', borderRadius: 7, overflow: 'hidden', marginBottom: 10 }}>
                   <div style={{ background: '#f8f7f4', padding: '6px 12px', borderBottom: '1px solid #e5e7eb' }}>
                     <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#6b7280' }}>Billing Summary</span>
@@ -808,7 +780,6 @@ const AdminRecentReservations = () => {
                         <td style={{ padding: '6px 12px', fontSize: 11, color: '#374151' }}>HST (13%)</td>
                         <td style={{ padding: '6px 12px', textAlign: 'right', fontWeight: 600, fontSize: 11, color: '#1a1a1a' }}>${billDetails.hstAmount.toFixed(2)}</td>
                       </tr>
-                      {/* Grand total — solid colour */}
                       <tr style={{ background: '#1e3a5f' }}>
                         <td style={{ padding: '10px 12px' }}>
                           <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>Total (CAD)</div>
@@ -820,24 +791,16 @@ const AdminRecentReservations = () => {
                       </tr>
                     </tbody>
                   </table>
-
-                  {/* Deposit / payment footer */}
                   {(billDetails.deposit != null || billDetails.returnedDeposit != null || billDetails.methodOfPayment) && (
                     <div style={{ background: '#f8f7f4', padding: '6px 12px', display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 10 }}>
-                      {billDetails.deposit != null && (
-                        <span><span style={{ color: '#9ca3af' }}>Deposit: </span><span style={{ fontWeight: 600, color: '#1a1a1a' }}>${Number(billDetails.deposit).toFixed(2)}</span></span>
-                      )}
-                      {billDetails.returnedDeposit != null && (
-                        <span><span style={{ color: '#9ca3af' }}>Returned: </span><span style={{ fontWeight: 600, color: '#16a34a' }}>${Number(billDetails.returnedDeposit).toFixed(2)}</span></span>
-                      )}
-                      {billDetails.methodOfPayment && (
-                        <span><span style={{ color: '#9ca3af' }}>Method: </span><span style={{ fontWeight: 600, color: '#1a1a1a' }}>{billDetails.methodOfPayment}</span></span>
-                      )}
+                      {billDetails.deposit != null && <span><span style={{ color: '#9ca3af' }}>Deposit: </span><span style={{ fontWeight: 600, color: '#1a1a1a' }}>${Number(billDetails.deposit).toFixed(2)}</span></span>}
+                      {billDetails.returnedDeposit != null && <span><span style={{ color: '#9ca3af' }}>Returned: </span><span style={{ fontWeight: 600, color: '#16a34a' }}>${Number(billDetails.returnedDeposit).toFixed(2)}</span></span>}
+                      {billDetails.methodOfPayment && <span><span style={{ color: '#9ca3af' }}>Method: </span><span style={{ fontWeight: 600, color: '#1a1a1a' }}>{billDetails.methodOfPayment}</span></span>}
                     </div>
                   )}
                 </div>
 
-                {/* Signature line */}
+                {/* Signature */}
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 9, color: '#9ca3af', marginBottom: 3 }}>Guest's Signature</div>
@@ -848,29 +811,20 @@ const AdminRecentReservations = () => {
                     905-835-1818 · manager@goodnightinn.ca
                   </div>
                 </div>
-
               </div>
             </div>
-            {/* ═══════ END PRINTABLE AREA ═══════ */}
 
             {/* Action buttons */}
             <div style={{ display: 'flex', gap: 8, padding: '0 12px 14px', flexWrap: 'wrap' }}>
-              <button
-                onClick={handleDownloadPdf}
-                disabled={generatingPdf}
-                style={{ flex: 1, padding: '11px 14px', borderRadius: 10, border: '1.5px solid #d1d5db', background: generatingPdf ? '#f1f0ed' : '#fff', color: generatingPdf ? '#9ca3af' : '#374151', cursor: generatingPdf ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-              >
+              <button onClick={handleDownloadPdf} disabled={generatingPdf}
+                style={{ flex: 1, padding: '11px 14px', borderRadius: 10, border: '1.5px solid #d1d5db', background: generatingPdf ? '#f1f0ed' : '#fff', color: generatingPdf ? '#9ca3af' : '#374151', cursor: generatingPdf ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                 {generatingPdf ? '⏳ Generating…' : '⬇ Download PDF'}
               </button>
-              <button
-                onClick={sendBill}
-                disabled={sendingEmail}
-                style={{ flex: 2, padding: '11px 14px', borderRadius: 10, border: 'none', background: sendingEmail ? '#93c5fd' : '#2563eb', color: '#fff', fontWeight: 700, cursor: sendingEmail ? 'not-allowed' : 'pointer', fontSize: 13, fontFamily: "'DM Sans', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-              >
+              <button onClick={sendBill} disabled={sendingEmail}
+                style={{ flex: 2, padding: '11px 14px', borderRadius: 10, border: 'none', background: sendingEmail ? '#93c5fd' : '#2563eb', color: '#fff', fontWeight: 700, cursor: sendingEmail ? 'not-allowed' : 'pointer', fontSize: 13, fontFamily: "'DM Sans', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                 {sendingEmail ? '⏳ Sending…' : '📧 Email Receipt to Guest'}
               </button>
             </div>
-
           </div>
         </div>
       )}
