@@ -31,7 +31,15 @@ export const AuthProvider = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
-  const login = () => signInWithPopup(auth, provider);
+ 
+
+  const login = async () => {
+  const result = await signInWithPopup(auth, provider);
+  const isAdmin = ADMIN_EMAILS.includes(result.user.email);
+  if (isAdmin) {
+    window.location.href = '/admin';
+  }
+};
   
    const logout = () => {
     signOut(auth);

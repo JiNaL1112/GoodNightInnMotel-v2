@@ -564,7 +564,6 @@ const Rooms = () => {
             <span className="rm-nav-label">Navigation</span>
             {[
               { href: '/admin',                  icon: '◈',  label: 'Dashboard'    },
-              { href: '/admin/reservation',       icon: '📋', label: 'Reservations' },
               { href: '/admin/rooms',             icon: '🏨', label: 'Rooms', active: true },
               { href: '/admin/picturemanagement', icon: '🖼️', label: 'Pictures'     },
             ].map(n => (
