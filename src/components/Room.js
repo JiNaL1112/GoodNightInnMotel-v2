@@ -10,10 +10,18 @@ const tagColors = {
 };
 
 const Room = ({ room }) => {
+
   const { id, name, size, maxPerson, description, price, imageData, tag } = room;
 
-  const tagStyle = tag && tagColors[tag]
-    ? tagColors[tag]
+  const tagMap = {
+    'Queen Bed':      'Best Value',
+    'Two Queen Beds': 'Family Fave',
+    'King Bed':       'Most Spacious',
+    'Kitchenette':    'Extended Stay',
+  };
+  const resolvedTag = tag || tagMap[name] || null;
+  const tagStyle = resolvedTag && tagColors[resolvedTag]
+    ? tagColors[resolvedTag]
     : { bg: '#e5e7eb', color: '#374151' };
 
   return (
@@ -29,12 +37,12 @@ const Room = ({ room }) => {
       >
         {!imageData && <span className="room-card-emoji">🛏️</span>}
 
-        {tag && (
+        {resolvedTag && (
           <span
             className="room-card-tag"
             style={{ background: tagStyle.bg, color: tagStyle.color }}
           >
-            {tag}
+            {resolvedTag}
           </span>
         )}
       </div>

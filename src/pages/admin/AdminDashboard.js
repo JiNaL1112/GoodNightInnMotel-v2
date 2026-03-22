@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ScrollToTop from '../../components/ScrollToTop';
-
 import AdminStats              from '../../components/AdminStats';
 import AdminRoomStatus         from '../../components/AdminRoomStatus';
 import AdminTodayPanel         from '../../components/AdminTodayPanel';
 import AdminRecentReservations from '../../components/AdminRecentReservations';
 import AdminQuickActions       from '../../components/AdminQuickActions';
 import { AuthContext }         from '../../context/AuthContext';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 
 import './admin-dashboard.css';
 
@@ -22,6 +23,29 @@ const AdminDashboard = () => {
   const [now, setNow]             = useState(new Date());
   const { user, logout }          = useContext(AuthContext);
   const navigate                  = useNavigate();
+
+
+  const [reservations, setReservations] = useState([]);
+  const [rooms, setRooms] = useState([]);
+  const [dataLoading, setDataLoading] = useState(true);
+
+useEffect(() => {
+  const fetchAll = async () => {
+    try {
+      const [resSnap, roomSnap] = await Promise.all([
+        getDocs(query(collection(db, 'reservations'), orderBy('createdAt', 'desc'))),
+        getDocs(collection(db, 'rooms')),
+      ]);
+      setReservations(resSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setRooms(roomSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (err) {
+      console.error('Dashboard fetch error:', err);
+    } finally {
+      setDataLoading(false);
+    }
+  };
+  fetchAll();
+}, []);
 
   // Live clock — updates every minute
   useEffect(() => {

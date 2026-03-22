@@ -44,9 +44,14 @@ const RoomHighlights = () => {
 
         <div className="rooms-grid" ref={ref}>
           {displayRooms.map((room, i) => {
-            const tag = room.tag || Object.keys(tagColors)[i] || 'Great Stay';
-            const tagStyle = tagColors[tag] || { bg: '#e5e7eb', color: '#374151' };
-
+            const tagMap = {
+              'Queen Bed':      'Best Value',
+              'Two Queen Beds': 'Family Fave',
+              'King Bed':       'Most Spacious',
+              'Kitchenette':    'Extended Stay',
+            };
+          const tag = room.tag || tagMap[room.name] || 'Great Stay';
+          const tagStyle = tagColors[tag] || { bg: '#e5e7eb', color: '#374151' };
             return (
               <div
                 key={room.id}
