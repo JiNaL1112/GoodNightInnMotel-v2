@@ -188,7 +188,6 @@ const PictureManagement = () => {
               <div className="pm-nav-label" style={{ padding: '0 8px', marginBottom: 8 }}>Navigation</div>
               {[
                 { href: '/admin',              icon: '◈',  label: 'Dashboard'    },
-                { href: '/admin/reservation',  icon: '📋', label: 'Reservations' },
                 { href: '/admin/rooms',        icon: '🏨', label: 'Rooms'        },
                 { href: '/admin/picturemanagement', icon: '🖼️', label: 'Pictures', active: true },
               ].map(n => (

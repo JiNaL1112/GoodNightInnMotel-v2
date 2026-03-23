@@ -5,7 +5,6 @@ import Home from '../pages/Home';
 import GalleryView from '../pages/GalleryView';
 import RoomDetails from '../pages/RoomDetails';
 import Activities from '../pages/Activities';
-import Reservation from '../pages/admin/Reservation';
 import ProtectedRoute from '../components/ProtectedRoute';
 import Rooms from '../pages/admin/Rooms';
 import PictureManagement from '../pages/admin/PictureManagement';
@@ -22,14 +21,6 @@ const router = createBrowserRouter([
     element: (
       <ProtectedRoute allowedRoles={['admin']}>
         <PictureManagement />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: '/admin/reservation',
-    element: (
-      <ProtectedRoute allowedRoles={['admin']}>
-        <Reservation />
       </ProtectedRoute>
     ),
   },
