@@ -2,49 +2,106 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" sizes="any" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" type="image/png" sizes="32x32" href="%PUBLIC_URL%/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="%PUBLIC_URL%/favicon-16x16.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
-    <meta
-      name="description"
-      content="Web site created using create-react-app"
-    />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
-    <!--
-      manifest.json provides metadata used when your web app is installed on a
-      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
-    -->
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <!--
-      Notice the use of %PUBLIC_URL% in the tags above.
-      It will be replaced with the URL of the `public` folder during the build.
-      Only files inside the `public` folder can be referenced from the HTML.
+    <meta name="theme-color" content="#2563eb" />
 
-      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
-      work correctly both with client-side routing and a non-root public URL.
-      Learn how to configure a non-root public URL by running `npm run build`.
-    -->
-    <!-- google fonts -->
+    <!-- Primary Meta -->
+    <title>GoodNight Inn | Port Colborne, ON</title>
+    <meta name="description" content="GoodNight Inn — clean, comfortable, and affordable rooms in Port Colborne, Ontario. Minutes from Niagara Falls & Nickel Beach. Free WiFi, free parking, outdoor pool. Book direct for the best rate." />
+    <meta name="keywords" content="motel Port Colborne, hotel Niagara, affordable motel Ontario, GoodNight Inn, Port Colborne accommodation, Niagara Falls hotel, Nickel Beach motel" />
+    <meta name="author" content="GoodNight Inn" />
+    <meta name="robots" content="index, follow" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://goodnightinn.ca/" />
+    <meta property="og:title" content="GoodNight Inn | Affordable Motel in Port Colborne, ON" />
+    <meta property="og:description" content="Clean, comfortable rooms starting from $115/night. Free WiFi, free parking, outdoor pool. Minutes from Niagara Falls. Family-managed since 2005." />
+    <meta property="og:image" content="%PUBLIC_URL%/logo512.png" />
+    <meta property="og:site_name" content="GoodNight Inn" />
+    <meta property="og:locale" content="en_CA" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="GoodNight Inn | Port Colborne, Ontario" />
+    <meta name="twitter:description" content="Affordable motel near Niagara Falls. Rooms from $115/night. Free WiFi, parking & pool. Book direct — best rate guaranteed." />
+    <meta name="twitter:image" content="%PUBLIC_URL%/logo512.png" />
+
+    <!-- Apple / PWA -->
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+
+    <!-- Canonical -->
+    <link rel="canonical" href="https://goodnightinn.ca/" />
+
+    <!-- Geo -->
+    <meta name="geo.region" content="CA-ON" />
+    <meta name="geo.placename" content="Port Colborne" />
+    <meta name="geo.position" content="42.8868;-79.2534" />
+    <meta name="ICBM" content="42.8868, -79.2534" />
+
+    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Barlow:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Gilda+Display&display=swap"
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500;600&family=Gilda+Display&display=swap"
       rel="stylesheet"
     />
-    <title>React App</title>
+
+    <!-- Structured Data (Local Business) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "LodgingBusiness",
+      "name": "GoodNight Inn",
+      "url": "https://goodnightinn.ca",
+      "logo": "https://goodnightinn.ca/logo512.png",
+      "image": "https://goodnightinn.ca/logo512.png",
+      "description": "Affordable, clean, and comfortable motel in Port Colborne, Ontario. Family-managed since 2005. Minutes from Niagara Falls and Nickel Beach.",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "664 Main St. W",
+        "addressLocality": "Port Colborne",
+        "addressRegion": "ON",
+        "postalCode": "L3K 5V4",
+        "addressCountry": "CA"
+      },
+      "geo": {
+        "@type": "GeoCoordinates",
+        "latitude": 42.8868,
+        "longitude": -79.2534
+      },
+      "telephone": "+18338551818",
+      "email": "manager@goodnightinn.ca",
+      "priceRange": "$",
+      "starRating": {
+        "@type": "Rating",
+        "ratingValue": "3"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.9",
+        "reviewCount": "500"
+      },
+      "amenityFeature": [
+        { "@type": "LocationFeatureSpecification", "name": "Free WiFi", "value": true },
+        { "@type": "LocationFeatureSpecification", "name": "Free Parking", "value": true },
+        { "@type": "LocationFeatureSpecification", "name": "Outdoor Pool", "value": true },
+        { "@type": "LocationFeatureSpecification", "name": "24-Hour Front Desk", "value": true }
+      ],
+      "openingHours": "Mo-Su 00:00-23:59",
+      "sameAs": [
+        "https://www.google.com/maps?q=Good+Night+Inn+664+Main+St+W+Port+Colborne"
+      ]
+    }
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    <!--
-      This HTML file is a template.
-      If you open it directly in the browser, you will see an empty page.
-
-      You can add webfonts, meta tags, or analytics to this file.
-      The build step will place the bundled scripts into the <body> tag.
-
-      To begin the development, run `npm start` or `yarn start`.
-      To create a production bundle, use `npm run build` or `yarn build`.
-    -->
   </body>
 </html>

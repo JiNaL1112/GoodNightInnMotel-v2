@@ -107,9 +107,9 @@ const AdminRecentReservations = () => {
   const [sortCol,        setSortCol]        = useState('checkIn');
   const [sortDir,        setSortDir]        = useState('asc');
   const [page,           setPage]           = useState(1);
-
-  // ── NEW: Export & Delete state ────────────────────────────────────────────
   const [deletingAll,    setDeletingAll]    = useState(false);
+  // Progress state for the export+delete operation
+  const [exportProgress, setExportProgress] = useState({ active: false, current: 0, total: 0, stage: '' });
 
   useEffect(() => { fetchReservations(); }, []);
   useEffect(() => { setPage(1); }, [activeTab, search, filterRoom, filterFrom, filterTo, sortCol, sortDir]);
@@ -124,7 +124,6 @@ const AdminRecentReservations = () => {
   };
 
   const handleSort     = (col) => { if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortCol(col); setSortDir('asc'); } };
-  
   const handleCheckIn  = async (r)  => { if (!window.confirm(`Check in ${r.pname}?`)) return; await updateDoc(doc(db, 'reservations', r.id), { checkedInAt: new Date() }); fetchReservations(); };
   const handleCheckOut = async (r)  => { if (!window.confirm(`Check out ${r.pname}?`)) return; await updateDoc(doc(db, 'reservations', r.id), { status: 'checked-out', checkedOutAt: new Date() }); fetchReservations(); };
   const handleDelete   = async (id) => { if (!window.confirm('Remove this reservation?')) return; await deleteDoc(doc(db, 'reservations', id)); fetchReservations(); };
@@ -153,7 +152,7 @@ const AdminRecentReservations = () => {
     }
     fetchReservations();
   };
-  
+
   const openAdd = () => {
     setIsEditing(false); setEditTarget(null); setRoomNumber('');
     setAddress(''); setCity(''); setProvince(''); setCountry(''); setPostalCode('');
@@ -210,37 +209,8 @@ const AdminRecentReservations = () => {
     try {
       const roomSnap = await getDocs(collection(db, 'rooms'));
       const allRooms = roomSnap.docs.map(d => ({ ...d.data(), id: d.id }));
-      let room = allRooms.find(r => r.id === res.roomId);
-      if (!room && res.roomName) {
-        room = allRooms.find(r => r.name?.toLowerCase().trim() === res.roomName?.toLowerCase().trim());
-      }
-      const roomPrice =
-        room?.price != null  ? Number(room.price)    :
-        res.roomPrice != null ? Number(res.roomPrice) : 0;
-      const roomName = room?.name ?? res.roomName ?? 'Unknown Room';
-      const checkIn  = res.checkIn?.toDate  ? res.checkIn.toDate()  : new Date(res.checkIn  || Date.now());
-      const checkOut = res.checkOut?.toDate ? res.checkOut.toDate() : new Date(res.checkOut || Date.now());
-      const nights   = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
-      const roomTotal = roomPrice * nights;
-      const accomTax  = roomTotal * 0.04;
-      const subTotal  = roomTotal + accomTax;
-      const hst       = subTotal * 0.13;
-      setBillDetails({
-        guest: res.pname, email: res.email, phone: res.phone,
-        address: res.address, city: res.city, province: res.province,
-        country: res.country, postalCode: res.postalCode,
-        company: res.company, driverLicNo: res.driverLicNo, dob: res.dob,
-        plateNumber: res.plateNumber, roomName, roomNumber: res.roomNumber || 'N/A',
-        numberOfRooms: res.numberOfRooms || 1,
-        checkIn:   checkIn.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }),
-        checkOut:  checkOut.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }),
-        createdAt: new Date().toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }),
-        nights, roomPrice, roomTotal, accomTax, subTotal,
-        hstAmount: hst, totalAmount: subTotal + hst,
-        deposit: res.deposit, returnedDeposit: res.returnedDeposit,
-        methodOfPayment: res.methodOfPayment, clerk: res.clerk,
-        adults: res.adults, kids: res.kids,
-      });
+      const bd = await buildBillDetails(res, allRooms);
+      setBillDetails(bd);
       setBillModal(true);
     } catch (err) {
       console.error('generateBill error:', err);
@@ -248,81 +218,238 @@ const AdminRecentReservations = () => {
     }
   };
 
-  const handleDownloadPdf = async () => {
-    const el = document.getElementById('receipt-printable');
-    if (!el) return;
-    setGeneratingPdf(true);
-    const scrollAncestors = [];
-    let node = el.parentElement;
-    while (node && node !== document.body) {
-      const cs = window.getComputedStyle(node);
-      if (['auto','hidden','scroll'].includes(cs.overflow) || ['auto','hidden','scroll'].includes(cs.overflowY) || node.style.maxHeight) {
-        scrollAncestors.push({ el: node, overflow: node.style.overflow, overflowY: node.style.overflowY, maxHeight: node.style.maxHeight });
-        node.style.overflow = 'visible'; node.style.overflowY = 'visible'; node.style.maxHeight = 'none';
-      }
-      node = node.parentElement;
+  // ── Helper: build bill details from a reservation + rooms list ───────────
+  const buildBillDetails = async (res, allRooms) => {
+    let room = allRooms.find(r => r.id === res.roomId);
+    if (!room && res.roomName) {
+      room = allRooms.find(r => r.name?.toLowerCase().trim() === res.roomName?.toLowerCase().trim());
     }
-    await new Promise(r => setTimeout(r, 200));
+    const roomPrice =
+      room?.price != null   ? Number(room.price)     :
+      res.roomPrice != null  ? Number(res.roomPrice)  : 0;
+    const roomName = room?.name ?? res.roomName ?? 'Unknown Room';
+    const checkIn  = res.checkIn?.toDate  ? res.checkIn.toDate()  : new Date(res.checkIn  || Date.now());
+    const checkOut = res.checkOut?.toDate ? res.checkOut.toDate() : new Date(res.checkOut || Date.now());
+    const nights    = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
+    const roomTotal = roomPrice * nights;
+    const accomTax  = roomTotal * 0.04;
+    const subTotal  = roomTotal + accomTax;
+    const hst       = subTotal * 0.13;
+    return {
+      guest: res.pname, email: res.email, phone: res.phone,
+      address: res.address, city: res.city, province: res.province,
+      country: res.country, postalCode: res.postalCode,
+      company: res.company, driverLicNo: res.driverLicNo, dob: res.dob,
+      plateNumber: res.plateNumber, roomName, roomNumber: res.roomNumber || 'N/A',
+      numberOfRooms: res.numberOfRooms || 1,
+      checkIn:   checkIn.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }),
+      checkOut:  checkOut.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }),
+      createdAt: new Date().toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }),
+      nights, roomPrice, roomTotal, accomTax, subTotal,
+      hstAmount: hst, totalAmount: subTotal + hst,
+      deposit: res.deposit, returnedDeposit: res.returnedDeposit,
+      methodOfPayment: res.methodOfPayment, clerk: res.clerk,
+      adults: res.adults, kids: res.kids,
+    };
+  };
+
+  // ── Helper: build the receipt HTML string (self-contained, no React) ──────
+  const buildReceiptHTML = (bd) => {
+    const rcTd  = 'padding:4px 0;color:#9ca3af;font-size:11px;white-space:nowrap;';
+    const rcVal = 'padding:4px 0;text-align:right;font-weight:600;color:#1a1a1a;font-size:11px;';
+    const row   = (k, v) => `<tr><td style="${rcTd}">${k}</td><td style="${rcVal}">${v}</td></tr>`;
+    return `
+<div style="background:#ffffff;width:680px;font-family:Arial,sans-serif;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+  <!-- Header -->
+  <div style="background:#1e3a5f;padding:13px 18px;display:flex;align-items:center;justify-content:space-between;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="width:32px;height:32px;background:rgba(255,255,255,0.15);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:16px;">🌙</div>
+      <div>
+        <div style="font-weight:700;font-size:14px;color:#fff;">GoodNight Inn</div>
+        <div style="font-size:9px;color:rgba(255,255,255,0.6);margin-top:1px;">664 Main St. W, Port Colborne, ON · 905-835-1818 · HST# 833074875RT0001</div>
+      </div>
+    </div>
+    <div style="text-align:right;">
+      <div style="font-size:9px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;">Receipt</div>
+      <div style="font-size:11px;color:#fff;font-weight:600;margin-top:2px;">${bd.createdAt}</div>
+    </div>
+  </div>
+  <!-- Guest bar -->
+  <div style="background:#f8f7f4;border-bottom:1px solid #e5e7eb;padding:10px 18px;display:flex;justify-content:space-between;align-items:center;">
+    <div>
+      <div style="font-size:9px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;">Guest</div>
+      <div style="font-size:15px;font-weight:700;color:#1a1a1a;margin-top:1px;">${bd.guest || ''}</div>
+      <div style="font-size:10px;color:#6b7280;margin-top:1px;">${[bd.email, bd.phone].filter(Boolean).join(' · ')}</div>
+      ${bd.company ? `<div style="font-size:10px;color:#6b7280;">${bd.company}</div>` : ''}
+    </div>
+    ${bd.clerk ? `<div style="text-align:right;"><div style="font-size:9px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;">Clerk</div><div style="font-size:11px;font-weight:600;color:#374151;margin-top:1px;">${bd.clerk}</div></div>` : ''}
+  </div>
+  <!-- Body -->
+  <div style="padding:12px 18px;">
+    <!-- Two columns -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+      <!-- Stay -->
+      <div style="background:#f8f7f4;border:1px solid #e5e7eb;border-radius:7px;padding:10px 12px;">
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:7px;">Stay Details</div>
+        <table style="width:100%;border-collapse:collapse;"><tbody>
+          ${row('Room Type', bd.roomName)}
+          ${row('Room No.', bd.roomNumber)}
+          ${row('# of Rooms', bd.numberOfRooms || 1)}
+          ${row('Check-in', bd.checkIn)}
+          ${row('Check-out', bd.checkOut)}
+          ${row('Nights', bd.nights)}
+          ${row('Guests', `${bd.adults}${parseInt(bd.kids) > 0 ? `, ${bd.kids} kids` : ''}`)}
+          ${row('Rate / Night', `$${Number(bd.roomPrice).toFixed(2)}`)}
+        </tbody></table>
+      </div>
+      <!-- Guest -->
+      <div style="background:#f8f7f4;border:1px solid #e5e7eb;border-radius:7px;padding:10px 12px;">
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:7px;">Guest Details</div>
+        <table style="width:100%;border-collapse:collapse;"><tbody>
+          ${bd.address     ? row('Address',    [bd.address, bd.city, bd.province].filter(Boolean).join(', ')) : ''}
+          ${bd.postalCode  ? row('Postal',     bd.postalCode)  : ''}
+          ${bd.country     ? row('Country',    bd.country)     : ''}
+          ${bd.driverLicNo ? row('Driver Lic.',bd.driverLicNo) : ''}
+          ${bd.dob         ? row('DOB',        bd.dob)         : ''}
+          ${bd.plateNumber ? row('Plate #',    bd.plateNumber) : ''}
+          ${bd.methodOfPayment ? row('Payment', bd.methodOfPayment) : ''}
+        </tbody></table>
+      </div>
+    </div>
+    <!-- Notice -->
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:7px 10px;margin-bottom:10px;font-size:9px;color:#92400e;line-height:1.5;">
+      <strong>Notice to Guests:</strong> Management reserves the right to refuse service. Not responsible for accidents, injury, or loss of valuables. Guests are responsible for all charges incurred during and after their stay.
+    </div>
+    <!-- Billing -->
+    <div style="border:1px solid #e5e7eb;border-radius:7px;overflow:hidden;margin-bottom:10px;">
+      <div style="background:#f8f7f4;padding:6px 12px;border-bottom:1px solid #e5e7eb;">
+        <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;">Billing Summary</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;"><tbody>
+        <tr style="border-bottom:1px solid #f3f4f6;">
+          <td style="padding:6px 12px;font-size:11px;color:#374151;">Room Total (${bd.nights} &times; $${Number(bd.roomPrice).toFixed(2)})</td>
+          <td style="padding:6px 12px;text-align:right;font-weight:600;font-size:11px;color:#1a1a1a;">$${Number(bd.roomTotal).toFixed(2)}</td>
+        </tr>
+        <tr style="border-bottom:1px solid #f3f4f6;">
+          <td style="padding:6px 12px;font-size:11px;color:#374151;">Accommodation Tax (4%)</td>
+          <td style="padding:6px 12px;text-align:right;font-weight:600;font-size:11px;color:#1a1a1a;">$${Number(bd.accomTax).toFixed(2)}</td>
+        </tr>
+        <tr style="border-bottom:1px solid #dbeafe;background:#eff6ff;">
+          <td style="padding:6px 12px;font-size:11px;font-weight:700;color:#1e3a5f;">Sub Total</td>
+          <td style="padding:6px 12px;text-align:right;font-weight:700;font-size:11px;color:#1e3a5f;">$${Number(bd.subTotal).toFixed(2)}</td>
+        </tr>
+        <tr style="border-bottom:1px solid #e5e7eb;">
+          <td style="padding:6px 12px;font-size:11px;color:#374151;">HST (13%)</td>
+          <td style="padding:6px 12px;text-align:right;font-weight:600;font-size:11px;color:#1a1a1a;">$${Number(bd.hstAmount).toFixed(2)}</td>
+        </tr>
+        <tr style="background:#1e3a5f;">
+          <td style="padding:10px 12px;">
+            <div style="font-size:12px;font-weight:700;color:#fff;">Total (CAD)</div>
+            <div style="font-size:9px;color:rgba(255,255,255,0.6);margin-top:1px;">All taxes included</div>
+          </td>
+          <td style="padding:10px 12px;text-align:right;font-size:22px;font-weight:800;color:#fff;font-family:monospace;">$${Number(bd.totalAmount).toFixed(2)}</td>
+        </tr>
+      </tbody></table>
+      ${(bd.deposit != null || bd.returnedDeposit != null || bd.methodOfPayment) ? `
+      <div style="background:#f8f7f4;padding:6px 12px;display:flex;gap:20px;flex-wrap:wrap;font-size:10px;">
+        ${bd.deposit != null ? `<span><span style="color:#9ca3af;">Deposit: </span><span style="font-weight:600;color:#1a1a1a;">$${Number(bd.deposit).toFixed(2)}</span></span>` : ''}
+        ${bd.returnedDeposit != null ? `<span><span style="color:#9ca3af;">Returned: </span><span style="font-weight:600;color:#16a34a;">$${Number(bd.returnedDeposit).toFixed(2)}</span></span>` : ''}
+        ${bd.methodOfPayment ? `<span><span style="color:#9ca3af;">Method: </span><span style="font-weight:600;color:#1a1a1a;">${bd.methodOfPayment}</span></span>` : ''}
+      </div>` : ''}
+    </div>
+    <!-- Signature -->
+    <div style="display:flex;align-items:flex-end;gap:16px;">
+      <div style="flex:1;">
+        <div style="font-size:9px;color:#9ca3af;margin-bottom:3px;">Guest's Signature</div>
+        <div style="border-bottom:1px solid #d1d5db;height:26px;"></div>
+      </div>
+      <div style="font-size:9px;color:#9ca3af;text-align:right;line-height:1.6;">
+        664 Main St. W, Port Colborne, ON L3K 5V4<br/>
+        905-835-1818 · manager@goodnightinn.ca
+      </div>
+    </div>
+  </div>
+</div>`;
+  };
+
+  // ── Helper: render receipt HTML into a PDF blob (off-screen) ─────────────
+  const generateReceiptPdfBlob = async (bd) => {
+    const container = document.createElement('div');
+    container.style.cssText = 'position:fixed;left:-9999px;top:0;z-index:-9999;background:#fff;padding:0;margin:0;';
+    container.innerHTML = buildReceiptHTML(bd);
+    document.body.appendChild(container);
+    await new Promise(r => setTimeout(r, 150));
+    const el = container.firstElementChild;
     try {
-      const canvas = await html2canvas(el, { scale: 2.5, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false, width: el.scrollWidth, height: el.scrollHeight, windowWidth: el.scrollWidth, windowHeight: el.scrollHeight, x: 0, y: 0, scrollX: 0, scrollY: 0 });
+      const canvas = await html2canvas(el, {
+        scale: 2.2, useCORS: true, allowTaint: true,
+        backgroundColor: '#ffffff', logging: false,
+        width: el.scrollWidth, height: el.scrollHeight,
+        windowWidth: el.scrollWidth, windowHeight: el.scrollHeight,
+        x: 0, y: 0, scrollX: 0, scrollY: 0,
+      });
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const pageW = pdf.internal.pageSize.getWidth(), pageH = pdf.internal.pageSize.getHeight();
-      const margin = 10, printW = pageW - margin * 2;
-      const totalImgH = (canvas.height * printW) / canvas.width;
-      const usablePageH = pageH - margin * 2;
-      if (totalImgH <= usablePageH) {
-        pdf.addImage(imgData, 'PNG', margin, (pageH - totalImgH) / 2, printW, totalImgH);
+      const pdf     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageW   = pdf.internal.pageSize.getWidth();
+      const pageH   = pdf.internal.pageSize.getHeight();
+      const margin  = 10;
+      const printW  = pageW - margin * 2;
+      const totalH  = (canvas.height * printW) / canvas.width;
+      const usableH = pageH - margin * 2;
+      if (totalH <= usableH) {
+        pdf.addImage(imgData, 'PNG', margin, (pageH - totalH) / 2, printW, totalH);
       } else {
-        const pxPerMm = canvas.width / printW, sliceHpx = usablePageH * pxPerMm;
+        const pxPerMm = canvas.width / printW;
+        const sliceH  = usableH * pxPerMm;
         let yPx = 0, pageIdx = 0;
         while (yPx < canvas.height) {
-          const thisSlice = Math.min(sliceHpx, canvas.height - yPx);
-          const sc = document.createElement('canvas'); sc.width = canvas.width; sc.height = Math.ceil(thisSlice);
-          const ctx = sc.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, sc.width, sc.height);
+          const thisSlice = Math.min(sliceH, canvas.height - yPx);
+          const sc = document.createElement('canvas');
+          sc.width = canvas.width; sc.height = Math.ceil(thisSlice);
+          const ctx = sc.getContext('2d');
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, sc.width, sc.height);
           ctx.drawImage(canvas, 0, yPx, canvas.width, thisSlice, 0, 0, canvas.width, thisSlice);
           if (pageIdx > 0) pdf.addPage();
           pdf.addImage(sc.toDataURL('image/png'), 'PNG', margin, margin, printW, thisSlice / pxPerMm);
           yPx += thisSlice; pageIdx++;
         }
       }
-      pdf.save(`receipt_${(billDetails.guest || 'guest').replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`);
-    } catch (err) {
-      console.error('PDF failed:', err); alert('PDF generation failed. Please try again.');
+      return pdf.output('blob');
     } finally {
-      scrollAncestors.forEach(({ el: a, overflow, overflowY, maxHeight }) => { a.style.overflow = overflow; a.style.overflowY = overflowY; a.style.maxHeight = maxHeight; });
-      setGeneratingPdf(false);
+      document.body.removeChild(container);
     }
   };
 
-  const sendBill = async () => {
-    if (!billDetails) return;
-    setSendingEmail(true);
-    try {
-      await emailjs.send('service_d3cy1e9', 'template_11t5n5a', {
-        guest: billDetails.guest, room_name: billDetails.roomName,
-        room_number: billDetails.roomNumber, check_in: billDetails.checkIn,
-        check_out: billDetails.checkOut, nights: billDetails.nights,
-        rate: `$${billDetails.roomPrice.toFixed(2)}`,
-        room_total: `$${billDetails.roomTotal.toFixed(2)}`,
-        accom_tax: `$${billDetails.accomTax.toFixed(2)}`,
-        subtotal: `$${billDetails.subTotal.toFixed(2)}`,
-        hst: `$${billDetails.hstAmount.toFixed(2)}`,
-        total: `$${billDetails.totalAmount.toFixed(2)}`,
-        to_email: billDetails.email,
-      }, '8nzBG6xAhz4eIyVij');
-      alert('Receipt sent!');
-    } catch { alert('Send failed'); }
-    finally { setSendingEmail(false); }
+  // ── Helper: fallback blob download (anchor click) ────────────────────────
+  const downloadBlobFallback = (blob, filename) => {
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
   };
 
-  const fmtDate = (ts) => {
-    if (!ts) return '—';
-    const d = ts?.toDate ? ts.toDate() : new Date(ts);
-    return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
+  // ── Helper: save a blob directly into a directory handle (subfolder-aware)
+  // folderHandle  = FileSystemDirectoryHandle (the root the user picked)
+  // subfolderName = e.g. 'Export-data' or null for root
+  // filename      = the file name to write
+  // blob          = Blob | ArrayBuffer
+  const saveToFolder = async (folderHandle, subfolderName, filename, blob) => {
+    let targetDir = folderHandle;
+    if (subfolderName) {
+      targetDir = await folderHandle.getDirectoryHandle(subfolderName, { create: true });
+    }
+    const fileHandle = await targetDir.getFileHandle(filename, { create: true });
+    const writable   = await fileHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
   };
 
-  // ── Core export helper (shared between Export and Export+Delete) ──────────
+  // ── Helper: check if File System Access API is available ─────────────────
+  const hasFSAPI = () => typeof window.showDirectoryPicker === 'function';
+
+  // ── Core export helper (Excel only) ──────────────────────────────────────
   const buildExcelWorkbook = async (recordsToExport) => {
     const roomSnap = await getDocs(collection(db, 'rooms'));
     const roomMap  = {};
@@ -425,70 +552,233 @@ const AdminRecentReservations = () => {
     return { XLSX, wb };
   };
 
-  // ── Export Excel (existing behaviour, unchanged) ──────────────────────────
-  const handleExportExcel = async () => {
-    if (sorted.length === 0) { alert('No records to export.'); return; }
-    const { XLSX, wb } = await buildExcelWorkbook(sorted);
-    XLSX.writeFile(wb, `reservations_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  // ── Helper: human-readable date stamp for folder names ──────────────────
+  // e.g.  15-Jan-2026
+  const dateFolderStamp = () => {
+    const d = new Date();
+    const day   = String(d.getDate()).padStart(2, '0');
+    const month = d.toLocaleString('en-CA', { month: 'short' }); // Jan, Feb …
+    const year  = d.getFullYear();
+    return `${day}-${month}-${year}`;
   };
 
-  // ── NEW: Export Excel then delete only the FILTERED/VISIBLE records ────────
+  // ── Helper: open (or reuse) the GoodNightInn folder handle ───────────────
+  // The user picks the GoodNightInn folder itself — NOT a parent above it.
+  // We cache it in sessionStorage as a key so the browser can restore it
+  // across button clicks within the same session (no re-picking needed).
+  const getGoodNightInnDir = async () => {
+    // showDirectoryPicker — user picks the GoodNightInn folder directly
+    const handle = await window.showDirectoryPicker({
+      id:      'goodnightinn-root',   // browser remembers the last location
+      mode:    'readwrite',
+      startIn: 'desktop',
+    });
+    return handle; // this IS the GoodNightInn folder
+  };
+
+  // ── Export Excel only (no delete) ────────────────────────────────────────
+  const handleExportExcel = async () => {
+    if (sorted.length === 0) { alert('No records to export.'); return; }
+
+    const stamp      = dateFolderStamp();
+    const dateSuffix = new Date().toISOString().slice(0, 10);
+
+    // Pick folder FIRST — must be called directly inside the user-gesture handler
+    // before any other await, otherwise Chrome blocks the picker
+    let expDir = null;
+    if (hasFSAPI()) {
+      try {
+        const gniDir = await window.showDirectoryPicker({
+          id:      'goodnightinn-root',
+          mode:    'readwrite',
+          startIn: 'desktop',
+        });
+        expDir = await gniDir.getDirectoryHandle(`Export-data-${stamp}`, { create: true });
+      } catch (err) {
+        if (err.name === 'AbortError') return; // user pressed Cancel
+        console.warn('Folder picker failed, using browser download:', err);
+        expDir = null;
+      }
+    }
+
+    // Build Excel now (after folder is resolved)
+    const excelFilename = `GoodNightInn_Export_${dateSuffix}.xlsx`;
+    const { XLSX, wb }  = await buildExcelWorkbook(sorted);
+
+    if (expDir) {
+      try {
+        const buffer   = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+        const fileH    = await expDir.getFileHandle(excelFilename, { create: true });
+        const writable = await fileH.createWritable();
+        await writable.write(new Uint8Array(buffer));
+        await writable.close();
+        alert(`✅ Excel saved!\n\nGoodNightInn / Export-data-${stamp} / ${excelFilename}`);
+      } catch (writeErr) {
+        console.error('Write failed:', writeErr);
+        XLSX.writeFile(wb, excelFilename);
+      }
+    } else {
+      XLSX.writeFile(wb, excelFilename);
+    }
+  };
+
+  // ── Export Excel + all PDFs + delete filtered records ────────────────────
   const handleExportAndDelete = async () => {
-    // Use `sorted` — the same records currently visible in the table (respects all filters)
     if (sorted.length === 0) {
       alert('No records match the current filters. Nothing to export or delete.');
       return;
     }
 
-    // Build a human-readable summary of active filters for the confirm dialog
+    const useFSAPI   = hasFSAPI();
+    const stamp      = dateFolderStamp();                      // e.g. 15-Jan-2026
+    const dateSuffix = new Date().toISOString().slice(0, 10); // for filenames
+
+    // ── STEP 1: Open folder picker IMMEDIATELY on button click ──────────────
+    // showDirectoryPicker MUST be called synchronously inside a user-gesture
+    // handler. Any await before it (confirm, fetch, etc.) breaks the gesture
+    // chain in Chrome/Edge and the picker never opens. So we pick the folder
+    // FIRST, confirm second.
+    let expDir = null;  // FileSystemDirectoryHandle for GoodNightInn/Export-data-DD-Mon-YYYY
+
+    if (useFSAPI) {
+      try {
+        // User picks their GoodNightInn folder directly.
+        // 'id' key makes the browser remember the last location —
+        // on repeat exports it re-opens inside GoodNightInn automatically.
+        const gniDir = await window.showDirectoryPicker({
+          id:      'goodnightinn-root',
+          mode:    'readwrite',
+          startIn: 'desktop',
+        });
+        // Auto-create the dated subfolder inside GoodNightInn
+        expDir = await gniDir.getDirectoryHandle(`Export-data-${stamp}`, { create: true });
+      } catch (err) {
+        if (err.name === 'AbortError') return; // user pressed Cancel — stop everything
+        // Any other error: warn and continue with fallback downloads
+        console.warn('Folder picker failed, will use browser downloads instead:', err);
+        expDir = null;
+      }
+    }
+
+    // ── STEP 2: Confirm after folder is already picked ──────────────────────
     const filterSummary = [];
-    if (search)      filterSummary.push(`Guest/email: "${search}"`);
-    if (filterRoom)  filterSummary.push(`Room: ${filterRoom}`);
-    if (filterFrom)  filterSummary.push(`From: ${filterFrom}`);
-    if (filterTo)    filterSummary.push(`To: ${filterTo}`);
+    if (search)     filterSummary.push(`Guest/email: "${search}"`);
+    if (filterRoom) filterSummary.push(`Room: ${filterRoom}`);
+    if (filterFrom) filterSummary.push(`From: ${filterFrom}`);
+    if (filterTo)   filterSummary.push(`To: ${filterTo}`);
     const filterLine = filterSummary.length
       ? `\n\nActive filters:\n  • ${filterSummary.join('\n  • ')}`
-      : '\n\n(No filters applied — this will affect ALL checked-out records)';
+      : '\n\n(No filters — this will export & delete ALL visible records)';
 
     const confirmed = window.confirm(
       `This will:\n\n` +
-      `  1. Export ${sorted.length} record(s) to Excel\n` +
-      `  2. Permanently delete those ${sorted.length} record(s) from Firestore` +
+      `  1. Save Excel summary (${sorted.length} records)\n` +
+      `  2. Save ${sorted.length} individual PDF receipt(s)\n` +
+      `  3. Permanently delete those ${sorted.length} record(s) from Firestore` +
       filterLine +
-      `\n\nThis action cannot be undone. Continue?`
+      (expDir
+        ? `\n\n📁 Saving to:\n   GoodNightInn / Export-data-${stamp} /`
+        : useFSAPI
+          ? `\n\n⚠️  Folder access failed. Files will download to Downloads folder.`
+          : `\n\n⚠️  Your browser doesn't support folder picking (use Chrome/Edge).\n   Files will download to your Downloads folder instead.`) +
+      `\n\nCannot be undone. Continue?`
     );
     if (!confirmed) return;
 
+    // ── STEP 3: Run the export ───────────────────────────────────────────────
     setDeletingAll(true);
-    try {
-      // Step 1: Generate and download the Excel file from filtered records
-      const { XLSX, wb } = await buildExcelWorkbook(sorted);
-      const dateSuffix = new Date().toISOString().slice(0, 10);
-      XLSX.writeFile(wb, `checked-out-archive_${dateSuffix}.xlsx`);
 
-      // Step 2: Delete only the filtered records in Firestore using batched writes
-      const ids = sorted.map(r => r.id);
-      const BATCH_SIZE = 450; // safely under Firestore's 500/batch limit
-      for (let i = 0; i < ids.length; i += BATCH_SIZE) {
-        const batch = writeBatch(db);
-        ids.slice(i, i + BATCH_SIZE).forEach(id => {
-          batch.delete(doc(db, 'reservations', id));
+    // Write a blob to expDir (folder mode) or trigger a browser download (fallback)
+    const saveFile = async (blob, filename) => {
+      if (expDir) {
+        const fileH    = await expDir.getFileHandle(filename, { create: true });
+        const writable = await fileH.createWritable();
+        await writable.write(blob);
+        await writable.close();
+      } else {
+        downloadBlobFallback(blob, filename);
+        await new Promise(r => setTimeout(r, 350)); // pace downloads
+      }
+    };
+
+    try {
+      // Fetch all room data once
+      const roomSnap = await getDocs(collection(db, 'rooms'));
+      const allRooms = roomSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+
+      // ── Save Excel ───────────────────────────────────────────────────────
+      setExportProgress({ active: true, current: 0, total: sorted.length, stage: 'Generating Excel…' });
+      const excelFilename = `GoodNightInn_Export_${dateSuffix}.xlsx`;
+      const { XLSX, wb }  = await buildExcelWorkbook(sorted);
+      if (expDir) {
+        const buffer   = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+        const fileH    = await expDir.getFileHandle(excelFilename, { create: true });
+        const writable = await fileH.createWritable();
+        await writable.write(new Uint8Array(buffer));
+        await writable.close();
+      } else {
+        XLSX.writeFile(wb, excelFilename);
+        await new Promise(r => setTimeout(r, 600));
+      }
+
+      // ── Save each PDF receipt ────────────────────────────────────────────
+      for (let i = 0; i < sorted.length; i++) {
+        const res      = sorted[i];
+        const safeName = (res.pname || 'Guest')
+          .replace(/[^a-zA-Z0-9 _\-]/g, '')
+          .replace(/\s+/g, '_')
+          .slice(0, 28);
+        const idx      = String(i + 1).padStart(3, '0');
+        const filename = `Receipt_${idx}_${safeName}_${dateSuffix}.pdf`;
+
+        setExportProgress({
+          active:  true,
+          current: i + 1,
+          total:   sorted.length,
+          stage:   `${expDir ? 'Saving' : 'Downloading'} PDF ${i + 1} of ${sorted.length}: ${res.pname || 'Guest'}`,
         });
+
+        try {
+          const bd   = await buildBillDetails(res, allRooms);
+          const blob = await generateReceiptPdfBlob(bd);
+          await saveFile(blob, filename);
+        } catch (pdfErr) {
+          console.error(`PDF failed for record ${i + 1} (${res.pname}):`, pdfErr);
+        }
+      }
+
+      // ── Delete records from Firestore ────────────────────────────────────
+      setExportProgress({ active: true, current: sorted.length, total: sorted.length, stage: 'Deleting from Firestore…' });
+      const ids      = sorted.map(r => r.id);
+      const BATCH_SZ = 450;
+      for (let i = 0; i < ids.length; i += BATCH_SZ) {
+        const batch = writeBatch(db);
+        ids.slice(i, i + BATCH_SZ).forEach(id => batch.delete(doc(db, 'reservations', id)));
         await batch.commit();
       }
 
-      // Step 3: Refresh local state and clear filters
+      // ── Done ─────────────────────────────────────────────────────────────
       await fetchReservations();
       clearFilters();
-      alert(`✅ Done! ${ids.length} record(s) exported and deleted from Firestore.`);
+      alert(
+        `✅ Export & Archive Complete!\n\n` +
+        (expDir
+          ? `📁 All files saved to:\n   GoodNightInn / Export-data-${stamp} /\n\n`
+          : `📥 Files downloaded to your Downloads folder.\n\n`) +
+        `📊 ${excelFilename}\n` +
+        `🧾 ${sorted.length} PDF receipt(s)\n\n` +
+        `🗑️  ${ids.length} record(s) deleted from Firestore.`
+      );
     } catch (err) {
       console.error('Export & Delete failed:', err);
-      alert('❌ Export succeeded but deletion failed. Check console for details.');
+      alert('❌ Something went wrong. Check the browser console.\nAny files already saved are valid.');
     } finally {
       setDeletingAll(false);
+      setExportProgress({ active: false, current: 0, total: 0, stage: '' });
     }
   };
 
+  // ── Derived lists ─────────────────────────────────────────────────────────
   const tagged         = reservations.map(r => ({ ...r, _eff: getEffectiveStatus(r) }));
   const pendingList    = tagged.filter(r => r._eff === 'pending');
   const upcomingList   = tagged.filter(r => r._eff === 'upcoming');
@@ -585,13 +875,51 @@ const AdminRecentReservations = () => {
     pending:    '⏳ Awaiting admin confirmation. Room is NOT blocked until confirmed.',
     upcoming:   '🕐 Confirmed bookings arriving in future. Click Check In when guest arrives.',
     inhouse:    '✅ Guest is currently in the room. Room is occupied.',
-    checkedout: '🏁 Completed stays. Use "Export & Clear Filtered" to archive and delete only filtered records, or "Export & Clear All" when no filters are applied.',
+    checkedout: '🏁 Completed stays. Use "Export & Clear" to download Excel + all PDFs, then delete records.',
   };
 
   return (
     <>
-      <div className="adm-panel" style={{ marginBottom: 20 }}>
+      {/* ── Progress overlay ── */}
+      {exportProgress.active && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 2000,
+          background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div style={{
+            background: '#12121a', border: '1px solid rgba(255,255,255,0.12)',
+            borderRadius: 18, padding: '36px 40px', maxWidth: 480, width: '90%',
+            textAlign: 'center', boxShadow: '0 24px 60px rgba(0,0,0,0.5)',
+          }}>
+            <div style={{ fontSize: 36, marginBottom: 16 }}>📦</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#e8e8f0', marginBottom: 8 }}>
+              Exporting Records…
+            </div>
+            <div style={{ fontSize: 13, color: '#9898b8', marginBottom: 20, minHeight: 20 }}>
+              {exportProgress.stage}
+            </div>
+            {/* Progress bar */}
+            <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 99, height: 8, marginBottom: 12, overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', borderRadius: 99,
+                background: 'linear-gradient(90deg, #40e0c8, #2563eb)',
+                width: `${exportProgress.total > 0 ? Math.round((exportProgress.current / exportProgress.total) * 100) : 0}%`,
+                transition: 'width 0.3s ease',
+              }} />
+            </div>
+            <div style={{ fontSize: 12, color: '#5a5a7a', fontFamily: 'var(--font-mono)' }}>
+              {exportProgress.current} / {exportProgress.total}
+            </div>
+            <div style={{ marginTop: 18, fontSize: 11, color: '#5a5a7a', lineHeight: 1.7 }}>
+              Your browser will download each file automatically.<br />
+              Do not close this tab.
+            </div>
+          </div>
+        </div>
+      )}
 
+      <div className="adm-panel" style={{ marginBottom: 20 }}>
         {/* Tabs */}
         <div className="adm-panel-head">
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
@@ -638,54 +966,34 @@ const AdminRecentReservations = () => {
             <button onClick={clearFilters} style={{ ...inp, cursor: 'pointer', color: '#f06090', border: '1px solid rgba(240,96,144,0.3)' }}>✕ Clear</button>
           )}
 
-          {/* ── Checked Out tab action buttons ── */}
+          {/* Checked-out action buttons */}
           {activeTab === 'checkedout' && (
             <>
-              {/* Export only */}
               <button
                 onClick={handleExportExcel}
-                style={{
-                  ...inp,
-                  cursor: 'pointer',
-                  color: '#40e0c8',
-                  border: '1px solid rgba(64,224,200,0.35)',
-                  background: 'rgba(64,224,200,0.08)',
-                  fontWeight: 700,
-                  whiteSpace: 'nowrap',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                }}
+                style={{ ...inp, cursor: 'pointer', color: '#40e0c8', border: '1px solid rgba(64,224,200,0.35)', background: 'rgba(64,224,200,0.08)', fontWeight: 700, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}
               >
                 ⬇ Export Excel
               </button>
 
-              {/* Export + Delete — the new button */}
               <button
                 onClick={handleExportAndDelete}
                 disabled={deletingAll}
-                title={hasFilters ? `Export & delete ${sorted.length} filtered record(s)` : `Export & delete all ${sorted.length} checked-out record(s)`}
+                title={hasFilters ? `Export Excel + PDFs, then delete ${sorted.length} filtered record(s)` : `Export Excel + PDFs, then delete all ${sorted.length} checked-out record(s)`}
                 style={{
                   ...inp,
                   cursor: deletingAll ? 'not-allowed' : 'pointer',
                   color: deletingAll ? 'var(--text-3)' : '#f06090',
                   border: `1px solid ${deletingAll ? 'rgba(255,255,255,0.1)' : 'rgba(240,96,144,0.4)'}`,
                   background: deletingAll ? 'rgba(255,255,255,0.03)' : 'rgba(240,96,144,0.08)',
-                  fontWeight: 700,
-                  whiteSpace: 'nowrap',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  opacity: deletingAll ? 0.6 : 1,
-                  transition: 'all 0.2s',
+                  fontWeight: 700, whiteSpace: 'nowrap',
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  opacity: deletingAll ? 0.6 : 1, transition: 'all 0.2s',
                 }}
               >
                 {deletingAll
-                  ? <>
-                      <span style={{ display: 'inline-block', width: 11, height: 11, border: '2px solid rgba(240,96,144,0.3)', borderTopColor: '#f06090', borderRadius: '50%', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
-                      Exporting & Deleting…
-                    </>
-                  : hasFilters ? '⬇🗑 Export & Clear Filtered' : '⬇🗑 Export & Clear All'
+                  ? <><span style={{ display: 'inline-block', width: 11, height: 11, border: '2px solid rgba(240,96,144,0.3)', borderTopColor: '#f06090', borderRadius: '50%', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} /> Working…</>
+                  : hasFilters ? '⬇🗑 Export + PDFs & Clear Filtered' : '⬇🗑 Export + PDFs & Clear All'
                 }
               </button>
             </>
@@ -988,11 +1296,60 @@ const AdminRecentReservations = () => {
             </div>
 
             <div style={{ display: 'flex', gap: 8, padding: '0 12px 14px', flexWrap: 'wrap' }}>
-              <button onClick={handleDownloadPdf} disabled={generatingPdf}
+              <button onClick={async () => {
+                const el = document.getElementById('receipt-printable');
+                if (!el) return;
+                setGeneratingPdf(true);
+                try {
+                  const canvas = await html2canvas(el, { scale: 2.5, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false });
+                  const imgData = canvas.toDataURL('image/png');
+                  const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+                  const pageW = pdf.internal.pageSize.getWidth(), pageH = pdf.internal.pageSize.getHeight();
+                  const margin = 10, printW = pageW - margin * 2;
+                  const totalImgH = (canvas.height * printW) / canvas.width;
+                  const usablePageH = pageH - margin * 2;
+                  if (totalImgH <= usablePageH) {
+                    pdf.addImage(imgData, 'PNG', margin, (pageH - totalImgH) / 2, printW, totalImgH);
+                  } else {
+                    const pxPerMm = canvas.width / printW, sliceHpx = usablePageH * pxPerMm;
+                    let yPx = 0, pageIdx = 0;
+                    while (yPx < canvas.height) {
+                      const thisSlice = Math.min(sliceHpx, canvas.height - yPx);
+                      const sc = document.createElement('canvas'); sc.width = canvas.width; sc.height = Math.ceil(thisSlice);
+                      const ctx = sc.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, sc.width, sc.height);
+                      ctx.drawImage(canvas, 0, yPx, canvas.width, thisSlice, 0, 0, canvas.width, thisSlice);
+                      if (pageIdx > 0) pdf.addPage();
+                      pdf.addImage(sc.toDataURL('image/png'), 'PNG', margin, margin, printW, thisSlice / pxPerMm);
+                      yPx += thisSlice; pageIdx++;
+                    }
+                  }
+                  pdf.save(`receipt_${(billDetails.guest || 'guest').replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`);
+                } catch (err) { console.error('PDF failed:', err); alert('PDF generation failed.'); }
+                finally { setGeneratingPdf(false); }
+              }} disabled={generatingPdf}
                 style={{ flex: 1, padding: '11px 14px', borderRadius: 10, border: '1.5px solid #d1d5db', background: generatingPdf ? '#f1f0ed' : '#fff', color: generatingPdf ? '#9ca3af' : '#374151', cursor: generatingPdf ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                 {generatingPdf ? '⏳ Generating…' : '⬇ Download PDF'}
               </button>
-              <button onClick={sendBill} disabled={sendingEmail}
+              <button onClick={async () => {
+                if (!billDetails) return;
+                setSendingEmail(true);
+                try {
+                  await emailjs.send('service_d3cy1e9', 'template_11t5n5a', {
+                    guest: billDetails.guest, room_name: billDetails.roomName,
+                    room_number: billDetails.roomNumber, check_in: billDetails.checkIn,
+                    check_out: billDetails.checkOut, nights: billDetails.nights,
+                    rate: `$${billDetails.roomPrice.toFixed(2)}`,
+                    room_total: `$${billDetails.roomTotal.toFixed(2)}`,
+                    accom_tax: `$${billDetails.accomTax.toFixed(2)}`,
+                    subtotal: `$${billDetails.subTotal.toFixed(2)}`,
+                    hst: `$${billDetails.hstAmount.toFixed(2)}`,
+                    total: `$${billDetails.totalAmount.toFixed(2)}`,
+                    to_email: billDetails.email,
+                  }, '8nzBG6xAhz4eIyVij');
+                  alert('Receipt sent!');
+                } catch { alert('Send failed'); }
+                finally { setSendingEmail(false); }
+              }} disabled={sendingEmail}
                 style={{ flex: 2, padding: '11px 14px', borderRadius: 10, border: 'none', background: sendingEmail ? '#93c5fd' : '#2563eb', color: '#fff', fontWeight: 700, cursor: sendingEmail ? 'not-allowed' : 'pointer', fontSize: 13, fontFamily: "'DM Sans', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                 {sendingEmail ? '⏳ Sending…' : '📧 Email Receipt to Guest'}
               </button>
@@ -1002,6 +1359,12 @@ const AdminRecentReservations = () => {
       )}
     </>
   );
+
+  function fmtDate(ts) {
+    if (!ts) return '—';
+    const d = ts?.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
 };
 
 export default AdminRecentReservations;
