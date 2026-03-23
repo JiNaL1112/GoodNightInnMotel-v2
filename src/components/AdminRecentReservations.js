@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useState } from 'react';
 import {
   collection, getDocs, doc, updateDoc, deleteDoc,
-  addDoc, query, orderBy
+  addDoc, query, orderBy, writeBatch
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { RoomContext } from '../context/RoomContext';
@@ -108,6 +108,9 @@ const AdminRecentReservations = () => {
   const [sortDir,        setSortDir]        = useState('asc');
   const [page,           setPage]           = useState(1);
 
+  // ── NEW: Export & Delete state ────────────────────────────────────────────
+  const [deletingAll,    setDeletingAll]    = useState(false);
+
   useEffect(() => { fetchReservations(); }, []);
   useEffect(() => { setPage(1); }, [activeTab, search, filterRoom, filterFrom, filterTo, sortCol, sortDir]);
 
@@ -126,56 +129,30 @@ const AdminRecentReservations = () => {
   const handleCheckOut = async (r)  => { if (!window.confirm(`Check out ${r.pname}?`)) return; await updateDoc(doc(db, 'reservations', r.id), { status: 'checked-out', checkedOutAt: new Date() }); fetchReservations(); };
   const handleDelete   = async (id) => { if (!window.confirm('Remove this reservation?')) return; await deleteDoc(doc(db, 'reservations', id)); fetchReservations(); };
 
-  
   const handleConfirm = async (id) => {
-  await updateDoc(doc(db, 'reservations', id), { status: 'booked' });
-
-  const reservation = reservations.find(r => r.id === id);
-
-  if (reservation?.email) {
-    try {
-      const checkIn  = reservation.checkIn?.toDate  
-        ? reservation.checkIn.toDate()  
-        : new Date(reservation.checkIn);
-      const checkOut = reservation.checkOut?.toDate 
-        ? reservation.checkOut.toDate() 
-        : new Date(reservation.checkOut);
-      const nights = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
-
-      await emailjs.send(
-        'service_kbo1u2f',       // ✅ your service ID
-        'template_sfskmym',      // ✅ your template ID
-        {
+    await updateDoc(doc(db, 'reservations', id), { status: 'booked' });
+    const reservation = reservations.find(r => r.id === id);
+    if (reservation?.email) {
+      try {
+        const checkIn  = reservation.checkIn?.toDate  ? reservation.checkIn.toDate()  : new Date(reservation.checkIn);
+        const checkOut = reservation.checkOut?.toDate ? reservation.checkOut.toDate() : new Date(reservation.checkOut);
+        const nights = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
+        await emailjs.send('service_kbo1u2f', 'template_sfskmym', {
           to_name:      reservation.pname       || 'Guest',
           to_email:     reservation.email,
           room_name:    reservation.roomName     || 'Room',
           room_number:  reservation.roomNumber   || 'TBD',
-          check_in:     checkIn.toLocaleDateString('en-CA', { 
-                          month: 'short', day: 'numeric', year: 'numeric' 
-                        }),
-          check_out:    checkOut.toLocaleDateString('en-CA', { 
-                          month: 'short', day: 'numeric', year: 'numeric' 
-                        }),
+          check_in:     checkIn.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }),
+          check_out:    checkOut.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }),
           nights,
           nights_plural:  nights === 1 ? '' : 's',
           adults:         reservation.adults ?? 1,
-          kids_line:      parseInt(reservation.kids) > 0 
-                            ? `, ${reservation.kids} Kids` 
-                            : '',
-        },
-        'bQHXnSt39Rw-xzwlP'     // ✅ your public key
-      );
-
-      console.log(`✅ Confirmation email sent to ${reservation.email}`);
-
-    } catch (err) {
-      console.error('❌ Confirmation email failed:', err);
-      // Reservation is still confirmed — email failure won't block it
+          kids_line:      parseInt(reservation.kids) > 0 ? `, ${reservation.kids} Kids` : '',
+        }, 'bQHXnSt39Rw-xzwlP');
+      } catch (err) { console.error('Confirmation email failed:', err); }
     }
-  }
-
-  fetchReservations();
-};
+    fetchReservations();
+  };
   
   const openAdd = () => {
     setIsEditing(false); setEditTarget(null); setRoomNumber('');
@@ -205,7 +182,6 @@ const AdminRecentReservations = () => {
     setShowModal(true);
   };
 
-  // ── Save roomPrice snapshot onto the reservation so receipt always has it ──
   const handleFormSubmit = async (e) => {
     e.preventDefault(); setSaving(true);
     const selectedRoom = rooms.find(r => r.id === selectedRoomId);
@@ -213,8 +189,7 @@ const AdminRecentReservations = () => {
     const data = {
       pname, email, phone, checkIn: checkInDate, checkOut: checkOutDate,
       adults, kids, roomId: selectedRoomId, roomName: selectedRoomName,
-      roomNumber, status: 'booked',
-      roomPrice,  // ← price snapshot stored on the reservation
+      roomNumber, status: 'booked', roomPrice,
       [isEditing ? 'updatedAt' : 'createdAt']: new Date(),
       address, city, province, country, postalCode,
       company, driverLicNo, dob,
@@ -231,31 +206,18 @@ const AdminRecentReservations = () => {
     finally { setSaving(false); }
   };
 
-  // ── 3-tier price lookup so the receipt ALWAYS shows the correct amount ─────
-  //  Tier 1: match room by roomId  (exact Firestore doc ID)
-  //  Tier 2: match room by roomName (covers seed data / recreated rooms)
-  //  Tier 3: use roomPrice stored directly on the reservation document
-  //  Last:   0 (receipt still opens, price shown as $0.00)
   const generateBill = async (res) => {
     try {
       const roomSnap = await getDocs(collection(db, 'rooms'));
       const allRooms = roomSnap.docs.map(d => ({ ...d.data(), id: d.id }));
-
       let room = allRooms.find(r => r.id === res.roomId);
-
       if (!room && res.roomName) {
-        room = allRooms.find(r =>
-          r.name?.toLowerCase().trim() === res.roomName?.toLowerCase().trim()
-        );
+        room = allRooms.find(r => r.name?.toLowerCase().trim() === res.roomName?.toLowerCase().trim());
       }
-
       const roomPrice =
-        room?.price != null          ? Number(room.price)       :
-        res.roomPrice != null         ? Number(res.roomPrice)    :
-        0;
-
+        room?.price != null  ? Number(room.price)    :
+        res.roomPrice != null ? Number(res.roomPrice) : 0;
       const roomName = room?.name ?? res.roomName ?? 'Unknown Room';
-
       const checkIn  = res.checkIn?.toDate  ? res.checkIn.toDate()  : new Date(res.checkIn  || Date.now());
       const checkOut = res.checkOut?.toDate ? res.checkOut.toDate() : new Date(res.checkOut || Date.now());
       const nights   = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
@@ -263,14 +225,12 @@ const AdminRecentReservations = () => {
       const accomTax  = roomTotal * 0.04;
       const subTotal  = roomTotal + accomTax;
       const hst       = subTotal * 0.13;
-
       setBillDetails({
         guest: res.pname, email: res.email, phone: res.phone,
         address: res.address, city: res.city, province: res.province,
         country: res.country, postalCode: res.postalCode,
         company: res.company, driverLicNo: res.driverLicNo, dob: res.dob,
-        plateNumber: res.plateNumber,
-        roomName, roomNumber: res.roomNumber || 'N/A',
+        plateNumber: res.plateNumber, roomName, roomNumber: res.roomNumber || 'N/A',
         numberOfRooms: res.numberOfRooms || 1,
         checkIn:   checkIn.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }),
         checkOut:  checkOut.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }),
@@ -278,8 +238,8 @@ const AdminRecentReservations = () => {
         nights, roomPrice, roomTotal, accomTax, subTotal,
         hstAmount: hst, totalAmount: subTotal + hst,
         deposit: res.deposit, returnedDeposit: res.returnedDeposit,
-        methodOfPayment: res.methodOfPayment,
-        clerk: res.clerk, adults: res.adults, kids: res.kids,
+        methodOfPayment: res.methodOfPayment, clerk: res.clerk,
+        adults: res.adults, kids: res.kids,
       });
       setBillModal(true);
     } catch (err) {
@@ -288,7 +248,6 @@ const AdminRecentReservations = () => {
     }
   };
 
-  // ── PDF ───────────────────────────────────────────────────────────────────
   const handleDownloadPdf = async () => {
     const el = document.getElementById('receipt-printable');
     if (!el) return;
@@ -363,53 +322,8 @@ const AdminRecentReservations = () => {
     return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  const tagged         = reservations.map(r => ({ ...r, _eff: getEffectiveStatus(r) }));
-  const pendingList    = tagged.filter(r => r._eff === 'pending');
-  const upcomingList   = tagged.filter(r => r._eff === 'upcoming');
-  const inHouseList    = tagged.filter(r => r._eff === 'in-house');
-  const checkedOutList = tagged.filter(r => r._eff === 'checked-out');
-
-  const tabList =
-    activeTab === 'pending'  ? pendingList  :
-    activeTab === 'upcoming' ? upcomingList :
-    activeTab === 'inhouse'  ? inHouseList  :
-    checkedOutList;
-
-  const roomNames = [...new Set(reservations.map(r => r.roomName).filter(Boolean))].sort();
-
-  const filtered = tabList.filter(r => {
-    const q = search.toLowerCase();
-    if (q && !r.pname?.toLowerCase().includes(q) && !r.email?.toLowerCase().includes(q)) return false;
-    if (filterRoom && r.roomName !== filterRoom) return false;
-    if (filterFrom) { const ci = r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn); if (ci < new Date(filterFrom)) return false; }
-    if (filterTo)   { const co = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut); if (co > new Date(filterTo + 'T23:59:59')) return false; }
-    return true;
-  });
-
-  const sorted = [...filtered].sort((a, b) => {
-    const getter = SORT_COLS[sortCol]; if (!getter) return 0;
-    const av = getter(a), bv = getter(b);
-    if (av < bv) return sortDir === 'asc' ? -1 : 1;
-    if (av > bv) return sortDir === 'asc' ?  1 : -1;
-    return 0;
-  });
-
-  const totalPages   = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
-  const shown        = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const hasFilters   = search || filterRoom || filterFrom || filterTo;
-  const clearFilters = () => { setSearch(''); setFilterRoom(''); setFilterFrom(''); setFilterTo(''); };
-
-  // ─────────────────────────────────────────────────────────────────────────────
-// DROP-IN REPLACEMENT for handleExportExcel in AdminRecentReservations.js
-//
-// Replace the entire existing handleExportExcel function (from the first line
-// "const handleExportExcel = async () => {" down to and including its closing
-// "};") with the code below.
-// ─────────────────────────────────────────────────────────────────────────────
-
-  const handleExportExcel = async () => {
-    if (sorted.length === 0) { alert('No records to export.'); return; }
-
+  // ── Core export helper (shared between Export and Export+Delete) ──────────
+  const buildExcelWorkbook = async (recordsToExport) => {
     const roomSnap = await getDocs(collection(db, 'rooms'));
     const roomMap  = {};
     roomSnap.docs.forEach(d => { roomMap[d.id] = d.data(); });
@@ -420,9 +334,7 @@ const AdminRecentReservations = () => {
       return d.toLocaleDateString('en-CA');
     };
 
-    // ── Build rows ────────────────────────────────────────────────────────────
-    const rows = sorted.map(r => {
-      // 3-tier price lookup (same as generateBill)
+    const rows = recordsToExport.map(r => {
       let room = roomMap[r.roomId];
       if (!room && r.roomName) {
         room = Object.values(roomMap).find(rm =>
@@ -432,24 +344,19 @@ const AdminRecentReservations = () => {
       const price = room?.price != null ? Number(room.price)
                   : r.roomPrice  != null ? Number(r.roomPrice)
                   : 0;
-
       const ci     = r.checkIn?.toDate  ? r.checkIn.toDate()  : new Date(r.checkIn  || 0);
       const co     = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut || 0);
       const nights = Math.max(1, Math.ceil((co - ci) / (1000 * 60 * 60 * 24)));
-
       const roomTotal = parseFloat((price * nights).toFixed(2));
       const accomTax  = parseFloat((roomTotal * 0.04).toFixed(2));
       const subTotal  = parseFloat((roomTotal + accomTax).toFixed(2));
       const hst       = parseFloat((subTotal * 0.13).toFixed(2));
       const total     = parseFloat((subTotal + hst).toFixed(2));
-
-      // Resolve status label
       const statusLabel =
         r._eff === 'pending'     ? 'Pending'     :
         r._eff === 'upcoming'    ? 'Upcoming'    :
         r._eff === 'in-house'    ? 'In-House'    :
         r._eff === 'checked-out' ? 'Checked Out' : r.status || '';
-
       return {
         'Status':               statusLabel,
         'Guest Name':           r.pname          || '',
@@ -486,60 +393,137 @@ const AdminRecentReservations = () => {
       };
     });
 
-    // ── Numeric columns that should receive a SUM totals row ─────────────────
     const SUM_COLS = [
       '# of Rooms', 'Adults', 'Kids', 'Nights',
       'Rate/Night ($)', 'Room Total ($)', 'Accom. Tax 4% ($)',
       'Sub Total ($)', 'HST 13% ($)', 'Total Paid ($)',
       'Deposit ($)', 'Returned Deposit ($)',
     ];
-
     const headers = Object.keys(rows[0]);
-
-    // ── SheetJS ───────────────────────────────────────────────────────────────
     const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.2/package/xlsx.mjs');
-
-    const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
-    const wb = XLSX.utils.book_new();
-
-    const firstDataRow = 2;                      // header on row 1, data from row 2
-    const lastDataRow  = 1 + rows.length;        // last data row (1-based)
-    const totalsRow    = lastDataRow + 1;         // totals go one row below data
-
-    // Helper: convert 0-based column index → Excel column letter (A, B, … AA …)
+    const ws   = XLSX.utils.json_to_sheet(rows, { header: headers });
+    const wb   = XLSX.utils.book_new();
+    const firstDataRow = 2;
+    const lastDataRow  = 1 + rows.length;
+    const totalsRow    = lastDataRow + 1;
     const colLetter = (idx) => {
-      let letter = '';
-      let n = idx + 1;
-      while (n > 0) {
-        const rem = (n - 1) % 26;
-        letter = String.fromCharCode(65 + rem) + letter;
-        n = Math.floor((n - 1) / 26);
-      }
+      let letter = ''; let n = idx + 1;
+      while (n > 0) { const rem = (n - 1) % 26; letter = String.fromCharCode(65 + rem) + letter; n = Math.floor((n - 1) / 26); }
       return letter;
     };
-
-    // "TOTALS" label in column A
     ws[`A${totalsRow}`] = { t: 's', v: 'TOTALS' };
-
-    // SUM formula for every numeric column
     headers.forEach((h, colIdx) => {
       if (!SUM_COLS.includes(h)) return;
-      const col     = colLetter(colIdx);
-      const cellRef = `${col}${totalsRow}`;
-      ws[cellRef]   = { t: 'n', f: `SUM(${col}${firstDataRow}:${col}${lastDataRow})` };
+      const col = colLetter(colIdx);
+      ws[`${col}${totalsRow}`] = { t: 'n', f: `SUM(${col}${firstDataRow}:${col}${lastDataRow})` };
     });
-
-    // Extend the sheet's declared range to cover the totals row
     const range = XLSX.utils.decode_range(ws['!ref']);
-    range.e.r   = totalsRow - 1;          // 0-based
-    ws['!ref']  = XLSX.utils.encode_range(range);
-
-    // Auto column widths (rough estimate from header length)
+    range.e.r  = totalsRow - 1;
+    ws['!ref'] = XLSX.utils.encode_range(range);
     ws['!cols'] = headers.map(h => ({ wch: Math.max(h.length + 2, 12) }));
-
     XLSX.utils.book_append_sheet(wb, ws, 'Reservations');
+    return { XLSX, wb };
+  };
+
+  // ── Export Excel (existing behaviour, unchanged) ──────────────────────────
+  const handleExportExcel = async () => {
+    if (sorted.length === 0) { alert('No records to export.'); return; }
+    const { XLSX, wb } = await buildExcelWorkbook(sorted);
     XLSX.writeFile(wb, `reservations_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
+
+  // ── NEW: Export Excel then delete only the FILTERED/VISIBLE records ────────
+  const handleExportAndDelete = async () => {
+    // Use `sorted` — the same records currently visible in the table (respects all filters)
+    if (sorted.length === 0) {
+      alert('No records match the current filters. Nothing to export or delete.');
+      return;
+    }
+
+    // Build a human-readable summary of active filters for the confirm dialog
+    const filterSummary = [];
+    if (search)      filterSummary.push(`Guest/email: "${search}"`);
+    if (filterRoom)  filterSummary.push(`Room: ${filterRoom}`);
+    if (filterFrom)  filterSummary.push(`From: ${filterFrom}`);
+    if (filterTo)    filterSummary.push(`To: ${filterTo}`);
+    const filterLine = filterSummary.length
+      ? `\n\nActive filters:\n  • ${filterSummary.join('\n  • ')}`
+      : '\n\n(No filters applied — this will affect ALL checked-out records)';
+
+    const confirmed = window.confirm(
+      `This will:\n\n` +
+      `  1. Export ${sorted.length} record(s) to Excel\n` +
+      `  2. Permanently delete those ${sorted.length} record(s) from Firestore` +
+      filterLine +
+      `\n\nThis action cannot be undone. Continue?`
+    );
+    if (!confirmed) return;
+
+    setDeletingAll(true);
+    try {
+      // Step 1: Generate and download the Excel file from filtered records
+      const { XLSX, wb } = await buildExcelWorkbook(sorted);
+      const dateSuffix = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `checked-out-archive_${dateSuffix}.xlsx`);
+
+      // Step 2: Delete only the filtered records in Firestore using batched writes
+      const ids = sorted.map(r => r.id);
+      const BATCH_SIZE = 450; // safely under Firestore's 500/batch limit
+      for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+        const batch = writeBatch(db);
+        ids.slice(i, i + BATCH_SIZE).forEach(id => {
+          batch.delete(doc(db, 'reservations', id));
+        });
+        await batch.commit();
+      }
+
+      // Step 3: Refresh local state and clear filters
+      await fetchReservations();
+      clearFilters();
+      alert(`✅ Done! ${ids.length} record(s) exported and deleted from Firestore.`);
+    } catch (err) {
+      console.error('Export & Delete failed:', err);
+      alert('❌ Export succeeded but deletion failed. Check console for details.');
+    } finally {
+      setDeletingAll(false);
+    }
+  };
+
+  const tagged         = reservations.map(r => ({ ...r, _eff: getEffectiveStatus(r) }));
+  const pendingList    = tagged.filter(r => r._eff === 'pending');
+  const upcomingList   = tagged.filter(r => r._eff === 'upcoming');
+  const inHouseList    = tagged.filter(r => r._eff === 'in-house');
+  const checkedOutList = tagged.filter(r => r._eff === 'checked-out');
+
+  const tabList =
+    activeTab === 'pending'  ? pendingList  :
+    activeTab === 'upcoming' ? upcomingList :
+    activeTab === 'inhouse'  ? inHouseList  :
+    checkedOutList;
+
+  const roomNames = [...new Set(reservations.map(r => r.roomName).filter(Boolean))].sort();
+
+  const filtered = tabList.filter(r => {
+    const q = search.toLowerCase();
+    if (q && !r.pname?.toLowerCase().includes(q) && !r.email?.toLowerCase().includes(q)) return false;
+    if (filterRoom && r.roomName !== filterRoom) return false;
+    if (filterFrom) { const ci = r.checkIn?.toDate ? r.checkIn.toDate() : new Date(r.checkIn); if (ci < new Date(filterFrom)) return false; }
+    if (filterTo)   { const co = r.checkOut?.toDate ? r.checkOut.toDate() : new Date(r.checkOut); if (co > new Date(filterTo + 'T23:59:59')) return false; }
+    return true;
+  });
+
+  const sorted = [...filtered].sort((a, b) => {
+    const getter = SORT_COLS[sortCol]; if (!getter) return 0;
+    const av = getter(a), bv = getter(b);
+    if (av < bv) return sortDir === 'asc' ? -1 : 1;
+    if (av > bv) return sortDir === 'asc' ?  1 : -1;
+    return 0;
+  });
+
+  const totalPages   = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const shown        = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const hasFilters   = search || filterRoom || filterFrom || filterTo;
+  const clearFilters = () => { setSearch(''); setFilterRoom(''); setFilterFrom(''); setFilterTo(''); };
 
   const TABS = [
     { id: 'pending',    label: '⏳ Pending',     count: pendingList.length,    activeColor: '#f0c060', activeBg: 'rgba(240,192,96,0.15)'  },
@@ -601,7 +585,7 @@ const AdminRecentReservations = () => {
     pending:    '⏳ Awaiting admin confirmation. Room is NOT blocked until confirmed.',
     upcoming:   '🕐 Confirmed bookings arriving in future. Click Check In when guest arrives.',
     inhouse:    '✅ Guest is currently in the room. Room is occupied.',
-    checkedout: '🏁 Completed stays.',
+    checkedout: '🏁 Completed stays. Use "Export & Clear Filtered" to archive and delete only filtered records, or "Export & Clear All" when no filters are applied.',
   };
 
   return (
@@ -653,10 +637,58 @@ const AdminRecentReservations = () => {
           {hasFilters && (
             <button onClick={clearFilters} style={{ ...inp, cursor: 'pointer', color: '#f06090', border: '1px solid rgba(240,96,144,0.3)' }}>✕ Clear</button>
           )}
+
+          {/* ── Checked Out tab action buttons ── */}
           {activeTab === 'checkedout' && (
-            <button onClick={handleExportExcel} style={{ ...inp, cursor: 'pointer', color: '#40e0c8', border: '1px solid rgba(64,224,200,0.35)', background: 'rgba(64,224,200,0.08)', fontWeight: 700, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}>
-              ⬇ Export Excel
-            </button>
+            <>
+              {/* Export only */}
+              <button
+                onClick={handleExportExcel}
+                style={{
+                  ...inp,
+                  cursor: 'pointer',
+                  color: '#40e0c8',
+                  border: '1px solid rgba(64,224,200,0.35)',
+                  background: 'rgba(64,224,200,0.08)',
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                }}
+              >
+                ⬇ Export Excel
+              </button>
+
+              {/* Export + Delete — the new button */}
+              <button
+                onClick={handleExportAndDelete}
+                disabled={deletingAll}
+                title={hasFilters ? `Export & delete ${sorted.length} filtered record(s)` : `Export & delete all ${sorted.length} checked-out record(s)`}
+                style={{
+                  ...inp,
+                  cursor: deletingAll ? 'not-allowed' : 'pointer',
+                  color: deletingAll ? 'var(--text-3)' : '#f06090',
+                  border: `1px solid ${deletingAll ? 'rgba(255,255,255,0.1)' : 'rgba(240,96,144,0.4)'}`,
+                  background: deletingAll ? 'rgba(255,255,255,0.03)' : 'rgba(240,96,144,0.08)',
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  opacity: deletingAll ? 0.6 : 1,
+                  transition: 'all 0.2s',
+                }}
+              >
+                {deletingAll
+                  ? <>
+                      <span style={{ display: 'inline-block', width: 11, height: 11, border: '2px solid rgba(240,96,144,0.3)', borderTopColor: '#f06090', borderRadius: '50%', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
+                      Exporting & Deleting…
+                    </>
+                  : hasFilters ? '⬇🗑 Export & Clear Filtered' : '⬇🗑 Export & Clear All'
+                }
+              </button>
+            </>
           )}
         </div>
 
@@ -841,8 +873,6 @@ const AdminRecentReservations = () => {
             </div>
 
             <div id="receipt-printable" style={{ background: '#ffffff', margin: '8px 12px 12px', borderRadius: 10, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
-
-              {/* Header */}
               <div style={{ background: '#1e3a5f', padding: '13px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.15)', borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>🌙</div>
@@ -857,7 +887,6 @@ const AdminRecentReservations = () => {
                 </div>
               </div>
 
-              {/* Guest strip */}
               <div style={{ background: '#f8f7f4', borderBottom: '1px solid #e5e7eb', padding: '10px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <div style={{ fontSize: 9, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1 }}>Guest</div>
@@ -874,20 +903,14 @@ const AdminRecentReservations = () => {
               </div>
 
               <div style={{ padding: '12px 18px' }}>
-                {/* Stay + Guest 2-col */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
                   <div style={{ background: '#f8f7f4', border: '1px solid #e5e7eb', borderRadius: 7, padding: '10px 12px' }}>
                     <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#6b7280', marginBottom: 7 }}>Stay Details</div>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <tbody>
-                        <tr><td style={rcTd}>Room Type</td><td style={rcVal}>{billDetails.roomName}</td></tr>
-                        <tr><td style={rcTd}>Room No.</td><td style={rcVal}>{billDetails.roomNumber}</td></tr>
-                        <tr><td style={rcTd}># of Rooms</td><td style={rcVal}>{billDetails.numberOfRooms || 1}</td></tr>
-                        <tr><td style={rcTd}>Check-in</td><td style={rcVal}>{billDetails.checkIn}</td></tr>
-                        <tr><td style={rcTd}>Check-out</td><td style={rcVal}>{billDetails.checkOut}</td></tr>
-                        <tr><td style={rcTd}>Nights</td><td style={rcVal}>{billDetails.nights}</td></tr>
-                        <tr><td style={rcTd}>Guests</td><td style={rcVal}>{billDetails.adults}{parseInt(billDetails.kids) > 0 ? `, ${billDetails.kids} kids` : ''}</td></tr>
-                        <tr><td style={rcTd}>Rate / Night</td><td style={rcVal}>${billDetails.roomPrice.toFixed(2)}</td></tr>
+                        {[['Room Type', billDetails.roomName], ['Room No.', billDetails.roomNumber], ['# of Rooms', billDetails.numberOfRooms || 1], ['Check-in', billDetails.checkIn], ['Check-out', billDetails.checkOut], ['Nights', billDetails.nights], ['Guests', `${billDetails.adults}${parseInt(billDetails.kids) > 0 ? `, ${billDetails.kids} kids` : ''}`], ['Rate / Night', `$${billDetails.roomPrice.toFixed(2)}`]].map(([k, v]) => (
+                          <tr key={k}><td style={rcTd}>{k}</td><td style={rcVal}>{v}</td></tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
@@ -907,12 +930,10 @@ const AdminRecentReservations = () => {
                   </div>
                 </div>
 
-                {/* Notice */}
                 <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '7px 10px', marginBottom: 10, fontSize: 9, color: '#92400e', lineHeight: 1.5 }}>
-                  <strong>Notice to Guests:</strong> Management reserves the right to refuse service. Not responsible for accidents, injury, or loss of valuables. Guests are responsible for all charges incurred during and after their stay. Items removed or damaged will be billed to your account.
+                  <strong>Notice to Guests:</strong> Management reserves the right to refuse service. Not responsible for accidents, injury, or loss of valuables. Guests are responsible for all charges incurred during and after their stay.
                 </div>
 
-                {/* Billing */}
                 <div style={{ border: '1px solid #e5e7eb', borderRadius: 7, overflow: 'hidden', marginBottom: 10 }}>
                   <div style={{ background: '#f8f7f4', padding: '6px 12px', borderBottom: '1px solid #e5e7eb' }}>
                     <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#6b7280' }}>Billing Summary</span>
@@ -940,9 +961,7 @@ const AdminRecentReservations = () => {
                           <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>Total (CAD)</div>
                           <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.6)', marginTop: 1 }}>All taxes included</div>
                         </td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: 22, fontWeight: 800, color: '#fff', fontFamily: 'monospace' }}>
-                          ${billDetails.totalAmount.toFixed(2)}
-                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: 22, fontWeight: 800, color: '#fff', fontFamily: 'monospace' }}>${billDetails.totalAmount.toFixed(2)}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -955,7 +974,6 @@ const AdminRecentReservations = () => {
                   )}
                 </div>
 
-                {/* Signature */}
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 9, color: '#9ca3af', marginBottom: 3 }}>Guest's Signature</div>
@@ -969,7 +987,6 @@ const AdminRecentReservations = () => {
               </div>
             </div>
 
-            {/* Action buttons */}
             <div style={{ display: 'flex', gap: 8, padding: '0 12px 14px', flexWrap: 'wrap' }}>
               <button onClick={handleDownloadPdf} disabled={generatingPdf}
                 style={{ flex: 1, padding: '11px 14px', borderRadius: 10, border: '1.5px solid #d1d5db', background: generatingPdf ? '#f1f0ed' : '#fff', color: generatingPdf ? '#9ca3af' : '#374151', cursor: generatingPdf ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
