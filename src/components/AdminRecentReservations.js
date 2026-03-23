@@ -121,11 +121,62 @@ const AdminRecentReservations = () => {
   };
 
   const handleSort     = (col) => { if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortCol(col); setSortDir('asc'); } };
-  const handleConfirm  = async (id) => { await updateDoc(doc(db, 'reservations', id), { status: 'booked' }); fetchReservations(); };
+  
   const handleCheckIn  = async (r)  => { if (!window.confirm(`Check in ${r.pname}?`)) return; await updateDoc(doc(db, 'reservations', r.id), { checkedInAt: new Date() }); fetchReservations(); };
   const handleCheckOut = async (r)  => { if (!window.confirm(`Check out ${r.pname}?`)) return; await updateDoc(doc(db, 'reservations', r.id), { status: 'checked-out', checkedOutAt: new Date() }); fetchReservations(); };
   const handleDelete   = async (id) => { if (!window.confirm('Remove this reservation?')) return; await deleteDoc(doc(db, 'reservations', id)); fetchReservations(); };
 
+  
+  const handleConfirm = async (id) => {
+  await updateDoc(doc(db, 'reservations', id), { status: 'booked' });
+
+  const reservation = reservations.find(r => r.id === id);
+
+  if (reservation?.email) {
+    try {
+      const checkIn  = reservation.checkIn?.toDate  
+        ? reservation.checkIn.toDate()  
+        : new Date(reservation.checkIn);
+      const checkOut = reservation.checkOut?.toDate 
+        ? reservation.checkOut.toDate() 
+        : new Date(reservation.checkOut);
+      const nights = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
+
+      await emailjs.send(
+        'service_kbo1u2f',       // ✅ your service ID
+        'template_sfskmym',      // ✅ your template ID
+        {
+          to_name:      reservation.pname       || 'Guest',
+          to_email:     reservation.email,
+          room_name:    reservation.roomName     || 'Room',
+          room_number:  reservation.roomNumber   || 'TBD',
+          check_in:     checkIn.toLocaleDateString('en-CA', { 
+                          month: 'short', day: 'numeric', year: 'numeric' 
+                        }),
+          check_out:    checkOut.toLocaleDateString('en-CA', { 
+                          month: 'short', day: 'numeric', year: 'numeric' 
+                        }),
+          nights,
+          nights_plural:  nights === 1 ? '' : 's',
+          adults:         reservation.adults ?? 1,
+          kids_line:      parseInt(reservation.kids) > 0 
+                            ? `, ${reservation.kids} Kids` 
+                            : '',
+        },
+        'bQHXnSt39Rw-xzwlP'     // ✅ your public key
+      );
+
+      console.log(`✅ Confirmation email sent to ${reservation.email}`);
+
+    } catch (err) {
+      console.error('❌ Confirmation email failed:', err);
+      // Reservation is still confirmed — email failure won't block it
+    }
+  }
+
+  fetchReservations();
+};
+  
   const openAdd = () => {
     setIsEditing(false); setEditTarget(null); setRoomNumber('');
     setAddress(''); setCity(''); setProvince(''); setCountry(''); setPostalCode('');
