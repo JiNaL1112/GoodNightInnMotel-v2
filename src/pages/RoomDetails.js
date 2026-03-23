@@ -459,10 +459,8 @@ const RoomDetails = () => {
       <RoomHeroBanner name={name} price={price} isBlocked={isBlocked} />
 
       <div className="container mx-auto">
-        <div style={layoutStyle}>
-
-          {/* ── LEFT COLUMN ── */}
-          <div style={leftColStyle}>
+          <div className="room-layout">
+            <div style={{ flex: '1 1 55%', minWidth: 0 }}>
 
             <div style={{ marginBottom: '28px' }}>
               <span className="section-tag">Accommodation</span>
@@ -491,7 +489,7 @@ const RoomDetails = () => {
           </div>
 
           {/* ── RIGHT COLUMN ── */}
-          <div style={rightColStyle}>
+          <div className="room-layout-right">
 
             {/* ── BLOCKED: show unavailability notice instead of booking form ── */}
             {isBlocked ? (

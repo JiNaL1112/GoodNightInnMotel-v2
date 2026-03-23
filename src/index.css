@@ -1354,3 +1354,33 @@ img { max-width: 100%; display: block; }
 
 
 
+.room-layout {
+  display: flex;
+  flex-direction: row;
+  gap: 48px;
+  padding: 72px 24px;
+  align-items: flex-start;
+}
+.room-layout-right {
+  flex: 1 1 40%;
+  min-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  position: sticky;
+  top: 88px;
+}
+@media (max-width: 900px) {
+  .room-layout {
+    flex-direction: column;
+    gap: 32px;
+    padding: 40px 16px;
+  }
+  .room-layout-right {
+    min-width: 0;        /* ← this is the critical fix */
+    position: static;
+    width: 100%;
+  }
+}
+
+

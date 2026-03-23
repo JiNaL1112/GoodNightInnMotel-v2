@@ -2,10 +2,8 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const actions = [
-  { icon: '➕', label: 'Add Booking',      href: '/admin/reservation' },
   { icon: '🏨', label: 'Manage Rooms',     href: '/admin/rooms'       },
   { icon: '🖼️', label: 'Pictures',         href: '/admin/picturemanagement' },
-  { icon: '📞', label: 'Call Guest',        href: 'tel:+18338551818'   },
 ];
 
 const AdminQuickActions = () => {

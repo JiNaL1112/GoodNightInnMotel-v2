@@ -24,7 +24,7 @@ const AdminDashboard = () => {
   const { user, logout }          = useContext(AuthContext);
   const navigate                  = useNavigate();
 
-
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [reservations, setReservations] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
@@ -127,6 +127,42 @@ useEffect(() => {
         </div>
       </div>
 
+
+      {/* Mobile nav drawer */}
+      <div className={`adm-mobile-drawer ${mobileNavOpen ? 'adm-mobile-drawer--open' : ''}`}>
+        <nav style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          {NAV.map(n => (
+            <button
+              key={n.id}
+              className={`adm-nav-item ${activeNav === n.id ? 'active' : ''}`}
+              onClick={() => { setActiveNav(n.id); setMobileNavOpen(false); }}
+            >
+              <span className="adm-nav-icon">{n.icon}</span>
+              {n.label}
+            </button>
+          ))}
+          <div className="adm-nav-divider" />
+          <button className="adm-nav-item" onClick={() => { navigate('/admin/rooms'); setMobileNavOpen(false); }}>
+            <span className="adm-nav-icon">🛏️</span> Manage Rooms
+          </button>
+          <button className="adm-nav-item" onClick={() => { navigate('/admin/picturemanagement'); setMobileNavOpen(false); }}>
+            <span className="adm-nav-icon">🖼️</span> Pictures
+          </button>
+        </nav>
+      </div>
+
+      {/* Overlay to close drawer when tapping outside */}
+      {mobileNavOpen && (
+        <div
+          onClick={() => setMobileNavOpen(false)}
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(0,0,0,0.3)',
+            zIndex: 198,
+          }}
+        />
+      )}
+
       {/* ── Body: Sidebar + Main ── */}
       <div className="adm-body">
 
@@ -179,13 +215,7 @@ useEffect(() => {
             >
               <span className="adm-nav-icon">🌐</span> View Site
             </button>
-            <a
-              href="tel:+18338551818"
-              className="adm-nav-item"
-              style={{ textDecoration: 'none' }}
-            >
-              <span className="adm-nav-icon">📞</span> Call Guest
-            </a>
+            
           </div>
 
         </aside>
