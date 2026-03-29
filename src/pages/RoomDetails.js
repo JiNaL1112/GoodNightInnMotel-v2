@@ -556,9 +556,9 @@ const RoomDetails = () => {
                   <div style={sectionLabelStyle}>👤 Personal Information</div>
 
                   <div style={fieldGroupStyle}>
-                    <label style={labelStyle}>Full Name *</label>
+                    <label style={labelStyle}>Full Name <span style={{ color: '#dc2626' }}>*</span></label>
                     <input type="text" placeholder="Your name" value={pname}
-                      onChange={(e) => setPName(e.target.value)} style={inputStyle} />
+  onChange={(e) => setPName(e.target.value)} style={inputStyle} required />
                   </div>
 
                   <div style={twoColStyle}>
@@ -568,9 +568,9 @@ const RoomDetails = () => {
                         onChange={(e) => setEmail(e.target.value)} style={inputStyle} />
                     </div>
                     <div style={fieldGroupStyle}>
-                      <label style={labelStyle}>Phone *</label>
+                      <label style={labelStyle}>Phone <span style={{ color: '#dc2626' }}>*</span></label>
                       <input type="tel" placeholder="+1 (000) 000-0000" value={phone}
-                        onChange={(e) => setPhone(e.target.value)} style={inputStyle} />
+  onChange={(e) => setPhone(e.target.value)} style={inputStyle} required />
                     </div>
                   </div>
 

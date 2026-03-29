@@ -5,7 +5,7 @@ import { auth, provider } from '../config/firebase';
 
 export const AuthContext = createContext();
 
-const ADMIN_EMAILS = ['jinalpatel11121999@gmail.com', 'manager@goodnightinn.ca' , 'aartiip07@gmail.com']; // your admin emails
+const ADMIN_EMAILS = ['jinalpatel11121999@gmail.com', 'manager@goodnightinn.ca' , 'aartiip07@gmail.com', 'adarshpatel1761@gmail.com','manager@goodnightmotel.com']; // your admin emails
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -33,11 +33,19 @@ export const AuthProvider = ({ children }) => {
 
  
 
+  
+
   const login = async () => {
-  const result = await signInWithPopup(auth, provider);
-  const isAdmin = ADMIN_EMAILS.includes(result.user.email);
-  if (isAdmin) {
-    window.location.href = '/admin';
+  try {
+    const result = await signInWithPopup(auth, provider);
+    const isAdmin = ADMIN_EMAILS.includes(result.user.email);
+    if (isAdmin) {
+      window.location.href = '/admin';
+    }
+  } catch (error) {
+    console.error('Login error:', error);
+    // error.code === 'auth/popup-blocked' means browser blocked it
+    // error.code === 'auth/unauthorized-domain' confirms the domain issue
   }
 };
   

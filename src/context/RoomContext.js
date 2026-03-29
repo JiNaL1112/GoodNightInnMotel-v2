@@ -82,6 +82,9 @@ const RoomProvider = ({ children }) => {
 
   const handleReservation = async () => {
     try {
+
+      if (!pname.trim()) { alert('Please enter your full name.'); return; }
+  if (!phone.trim()) { alert('Please enter your phone number.'); return; }
       const assignedRoomNumber = roomNumber || null;
 
       await addDoc(collection(db, 'reservations'), {
