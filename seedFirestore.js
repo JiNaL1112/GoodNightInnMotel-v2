@@ -36,14 +36,14 @@ const {
 
 // ── Firebase config (same as src/config/firebase.js) ─────────────────────────
 const firebaseConfig = {
-  apiKey: "AIzaSyCbclH1nS5O7IbWH5oEJsVL-LBWGUeEUhY",
-  authDomain: "goodnightinn-fe916.firebaseapp.com",
-  projectId: "goodnightinn-fe916",
-  storageBucket: "goodnightinn-fe916.firebasestorage.app",
-  messagingSenderId: "960107487429",
-  appId: "1:960107487429:web:252e7b09937899b62fd0ac",
-  measurementId: "G-ELQQ14GLFY"
+  apiKey: "AIzaSyDFePwSoEz4tEA97GUyBAsPu6UMTtgRoUU",
+  authDomain: "goodnightinn2026.firebaseapp.com",
+  projectId: "goodnightinn2026",
+  storageBucket: "goodnightinn2026.firebasestorage.app",
+  messagingSenderId: "998426403387",
+  appId: "1:998426403387:web:f8341e2a533dc7bbe6b21e"
 };
+
 
 const app = initializeApp(firebaseConfig);
 const db  = getFirestore(app);
