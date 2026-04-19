@@ -5,8 +5,6 @@ import { imageData } from '../data';
 
 export const RoomContext = createContext();
 
-const ALL_ROOM_NUMBERS = Array.from({ length: 23 }, (_, i) => i + 1);
-
 const RoomProvider = ({ children }) => {
   const [rooms,            setRooms]            = useState([]);
   const [loading,          setLoading]          = useState(false);
@@ -82,13 +80,11 @@ const RoomProvider = ({ children }) => {
 
   const handleReservation = async () => {
     try {
-
       if (!pname.trim()) { alert('Please enter your full name.'); return; }
-  if (!phone.trim()) { alert('Please enter your phone number.'); return; }
+      if (!phone.trim()) { alert('Please enter your phone number.'); return; }
       const assignedRoomNumber = roomNumber || null;
 
       await addDoc(collection(db, 'reservations'), {
-        // Core fields
         pname,
         email,
         phone,
@@ -101,8 +97,6 @@ const RoomProvider = ({ children }) => {
         roomNumber: assignedRoomNumber,
         status:     'pending',
         createdAt:  new Date(),
-
-        // Extended registration fields
         address,
         city,
         province,
@@ -137,8 +131,6 @@ const RoomProvider = ({ children }) => {
         rooms,
         loading,
         images,
-
-        // Core booking state
         pname,            setPName,
         email,            setEmail,
         phone,            setPhone,
@@ -149,8 +141,6 @@ const RoomProvider = ({ children }) => {
         selectedRoomId,   setSelectedRoomId,
         selectedRoomName, setSelectedRoomName,
         roomNumber,       setRoomNumber,
-
-        // Extended registration state
         address,          setAddress,
         city,             setCity,
         province,         setProvince,
@@ -165,8 +155,6 @@ const RoomProvider = ({ children }) => {
         plateNumber,      setPlateNumber,
         clerk,            setClerk,
         numberOfRooms,    setNumberOfRooms,
-
-        // Actions
         handleClick,
         handleReservation,
         fetchRooms,

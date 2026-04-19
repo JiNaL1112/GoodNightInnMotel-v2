@@ -4,7 +4,6 @@ import ScrollToTop          from '../../components/ScrollToTop';
 import { AuthContext }      from '../../context/AuthContext';
 import {
   collection, getDocs, addDoc, deleteDoc, doc, serverTimestamp,
-  query, where,
 } from 'firebase/firestore';
 
 const PictureManagement = () => {
@@ -13,12 +12,10 @@ const PictureManagement = () => {
   const [uploading, setUploading] = useState(false);
   const [deleting,  setDeleting]  = useState(null);
   const [lightbox,  setLightbox]  = useState(null);
-  // NEW: track custom names per file before upload
-  const [pendingFiles,  setPendingFiles]  = useState([]); // [{file, name}]
+  const [pendingFiles,  setPendingFiles]  = useState([]);
   const [searchName,    setSearchName]    = useState('');
-  const [searchResults, setSearchResults] = useState(null); // null = no search active
+  const [searchResults, setSearchResults] = useState(null);
 
-  // Hide global header/footer
   useEffect(() => {
     const els = [
       document.querySelector('.site-header'),
@@ -36,19 +33,16 @@ const PictureManagement = () => {
 
   useEffect(() => { fetchImages(); }, []);
 
-  // Step 1: user picks files → stage them with editable names
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
-    // Pre-fill name from filename (strip extension)
     const staged = files.map(file => ({
       file,
-      name: file.name.replace(/\.[^.]+$/, ''), // strip extension
+      name: file.name.replace(/\.[^.]+$/, ''),
     }));
     setPendingFiles(staged);
   };
 
-  // Step 2: user confirms upload with (possibly edited) names
   const handleUpload = async () => {
     if (!pendingFiles.length) return;
     setUploading(true);
@@ -60,7 +54,7 @@ const PictureManagement = () => {
             try {
               await addDoc(collection(db, 'gallery'), {
                 base64:    reader.result,
-                name:      name.trim() || file.name, // store the name
+                name:      name.trim() || file.name,
                 createdAt: serverTimestamp(),
               });
               resolve();
@@ -71,7 +65,7 @@ const PictureManagement = () => {
         });
       }));
       await fetchImages();
-      setPendingFiles([]); // clear staging area
+      setPendingFiles([]);
     } catch (err) { console.error('Upload failed:', err); }
     finally { setUploading(false); }
   };
@@ -87,7 +81,6 @@ const PictureManagement = () => {
     finally { setDeleting(null); }
   };
 
-  // Search images by name (client-side filter)
   const handleSearch = () => {
     if (!searchName.trim()) { setSearchResults(null); return; }
     const q = searchName.trim().toLowerCase();
@@ -165,7 +158,6 @@ const PictureManagement = () => {
       <div className="pm-shell">
         <ScrollToTop />
 
-        {/* Top bar */}
         <div className="pm-topbar">
           <span className="pm-topbar-title">
             <span className="pm-topbar-icon">🌙</span>
@@ -182,7 +174,6 @@ const PictureManagement = () => {
         </div>
 
         <div className="pm-body">
-          {/* Sidebar */}
           <aside className="pm-sidebar">
             <div style={{ padding: '0 8px' }}>
               <div className="pm-nav-label" style={{ padding: '0 8px', marginBottom: 8 }}>Navigation</div>
@@ -203,7 +194,6 @@ const PictureManagement = () => {
             </div>
           </aside>
 
-          {/* Main */}
           <main className="pm-content">
             <div className="pm-page-head">
               <div className="pm-page-tag">Admin Management</div>
@@ -211,7 +201,6 @@ const PictureManagement = () => {
               <div className="pm-page-sub">Upload and manage photos. Each photo gets a name for easy retrieval.</div>
             </div>
 
-            {/* Stats */}
             <div className="pm-stats">
               <div className="pm-stat-pill">
                 <div className="pm-stat-val">{images.length}</div>
@@ -228,7 +217,6 @@ const PictureManagement = () => {
               )}
             </div>
 
-            {/* ── STEP 1: File picker zone ── */}
             <div className="pm-upload-zone" style={{ marginBottom: pendingFiles.length ? 12 : 20 }}>
               <input
                 type="file"
@@ -243,7 +231,6 @@ const PictureManagement = () => {
               <div className="pm-upload-btn">Choose Files</div>
             </div>
 
-            {/* ── STEP 2: Staging area — edit names before upload ── */}
             {pendingFiles.length > 0 && (
               <div style={{ background: '#12121a', border: '1px solid rgba(240,192,96,0.2)', borderRadius: 14, padding: '20px 20px 16px', marginBottom: 28 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: '#f0c060', marginBottom: 14 }}>
@@ -254,7 +241,7 @@ const PictureManagement = () => {
                   <div key={idx} className="pm-pending-row">
                     <img
                       src={URL.createObjectURL(pf.file)}
-                      alt="preview"
+                      alt={pf.name || `upload preview ${idx + 1}`}
                       className="pm-pending-thumb"
                     />
                     <input
@@ -292,7 +279,6 @@ const PictureManagement = () => {
               </div>
             )}
 
-            {/* ── Search by name ── */}
             {images.length > 0 && (
               <div className="pm-search-row">
                 <input
@@ -309,7 +295,6 @@ const PictureManagement = () => {
               </div>
             )}
 
-            {/* ── Grid ── */}
             {displayedImages.length === 0 && !uploading && (
               <div style={{ textAlign: 'center', padding: '48px 0', color: '#5a5a7a' }}>
                 <div style={{ fontSize: 36, marginBottom: 10 }}>
@@ -335,12 +320,11 @@ const PictureManagement = () => {
                     <div key={img.id} className="pm-img-card">
                       <img
                         src={img.base64}
-                        alt={img.name || 'Gallery'}
+                        alt={img.name || 'Gallery photo'}
                         onClick={() => setLightbox({ src: img.base64, name: img.name })}
                         loading="lazy"
                         style={{ cursor: 'zoom-in' }}
                       />
-                      {/* Name label below image */}
                       <div className="pm-img-name-label" title={img.name}>
                         {img.name || '(no name)'}
                       </div>
@@ -362,7 +346,6 @@ const PictureManagement = () => {
           </main>
         </div>
 
-        {/* Lightbox */}
         {lightbox && (
           <div className="pm-lightbox" onClick={() => setLightbox(null)}>
             <button className="pm-lightbox-close" onClick={() => setLightbox(null)}>×</button>

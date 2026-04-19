@@ -1,6 +1,6 @@
 import Header from './components/Header';
 import Footer from './components/Footer';
-import router from './routes'; // defined separately
+import router from './routes';
 
 
 // react router
