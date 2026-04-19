@@ -312,7 +312,7 @@ const GalleryView = () => {
                 >
                   <img
                     src={img.src}
-                    alt={`GoodNight Inn — photo ${i + 1}`}
+                    alt={`GoodNight Inn — ${i + 1}`}
                     loading="lazy"
                     style={{
                       width: '100%', height: '100%',

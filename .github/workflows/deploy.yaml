@@ -3,34 +3,29 @@ name: Deploy GoodNight Inn to Firebase
 on:
   push:
     branches:
-      - main        # Deploy when pushing to main
+      - main
   pull_request:
     branches:
-      - main        # Run tests on pull requests
+      - main
 
 jobs:
-  # ── Job 1: Test & Build ──────────────────────────────────
   build:
     name: Build React App
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout code
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # Setup Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
 
-      # Install dependencies
       - name: Install Dependencies
         run: npm ci
 
-      # Create .env file from GitHub Secrets
       - name: Create Environment File
         run: |
           echo "REACT_APP_FIREBASE_API_KEY=${{ secrets.REACT_APP_FIREBASE_API_KEY }}" >> .env
@@ -40,11 +35,11 @@ jobs:
           echo "REACT_APP_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.REACT_APP_FIREBASE_MESSAGING_SENDER_ID }}" >> .env
           echo "REACT_APP_FIREBASE_APP_ID=${{ secrets.REACT_APP_FIREBASE_APP_ID }}" >> .env
 
-      # Build the React app
       - name: Build React App
         run: npm run build
+        env:
+          CI: false
 
-      # Upload build artifacts for deploy job
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -52,26 +47,22 @@ jobs:
           path: build/
           retention-days: 1
 
-  # ── Job 2: Deploy to Firebase ────────────────────────────
   deploy:
     name: Deploy to Firebase Hosting
     runs-on: ubuntu-latest
-    needs: build                    # Only runs if build succeeds
+    needs: build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-      # Checkout code
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # Download build artifacts
       - name: Download Build Artifacts
         uses: actions/download-artifact@v4
         with:
           name: build-files
           path: build/
 
-      # Deploy to Firebase Hosting
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
@@ -80,7 +71,6 @@ jobs:
           projectId: goodnightinn2026
           channelId: live
 
-  # ── Job 3: Preview Deploy for Pull Requests ──────────────
   preview:
     name: Deploy Preview Channel
     runs-on: ubuntu-latest
@@ -97,11 +87,9 @@ jobs:
           name: build-files
           path: build/
 
-      # Deploy preview channel for PRs
       - name: Deploy Preview to Firebase
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           projectId: goodnightinn2026
-          # Creates a temporary preview URL for each PR
